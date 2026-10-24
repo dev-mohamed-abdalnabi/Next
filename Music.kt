@@ -493,7 +493,12 @@ private fun AddToPlaylistDialog(ids: List<Long>, onDismiss: () -> Unit) {
 // ═══════════════════════════ المشغّل المصغّر ═══════════════════════════
 
 @Composable
-fun MiniPlayer(onOpen: () -> Unit, onDismiss: () -> Unit = { Music.dismiss() }) {
+fun MiniPlayer(onOpen: () -> Unit) {
+    MiniPlayer(onOpen = onOpen, onDismiss = { Music.dismiss() })
+}
+
+@Composable
+fun MiniPlayer(onOpen: () -> Unit, onDismiss: () -> Unit) {
     val s = Music.current ?: return
     val cs = MaterialTheme.colorScheme
     val density = LocalDensity.current
@@ -523,7 +528,6 @@ fun MiniPlayer(onOpen: () -> Unit, onDismiss: () -> Unit = { Music.dismiss() }) 
                     offsetY = (offsetY + delta).coerceAtLeast(0f)
                 },
                 onDragStopped = { velocity ->
-                    // إذا كان السحب سريعاً لأسفل أو تجاوز المسافة المحددة
                     if (offsetY > threshold || (velocity > 600f && offsetY > 10f)) {
                         scope.launch {
                             val endY = with(density) { 120.dp.toPx() }
@@ -533,7 +537,6 @@ fun MiniPlayer(onOpen: () -> Unit, onDismiss: () -> Unit = { Music.dismiss() }) 
                             onDismiss()
                         }
                     } else {
-                        // رجوع ناعم مكانه في حال السحب الخفيف غير المتعمد
                         scope.launch {
                             Animatable(offsetY).animateTo(0f, spring(0.75f, 600f)) {
                                 offsetY = value
@@ -570,7 +573,7 @@ fun MiniPlayer(onOpen: () -> Unit, onDismiss: () -> Unit = { Music.dismiss() }) 
         }
     }
 }
-
+            
 // ═══════════════════════════ شاشة التشغيل الكاملة ═══════════════════════════
 
 @Composable
