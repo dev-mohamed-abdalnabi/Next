@@ -70,7 +70,7 @@ object Prefs {
     var skipIntro by mutableIntStateOf(85)       // ثواني زر التخطي في الفيديو
 
     // الموسيقى
-    var minAudioSec by mutableIntStateOf(30)     // تجاهل الملفات الأقصر من كده
+    var minAudioSec by mutableIntStateOf(0)     // تجاهل الملفات الأقصر من كده
     var restoreQueue by mutableStateOf(true)     // رجّع آخر قائمة تشغيل
     var songSort by mutableIntStateOf(0)         // 0 الاسم، 1 الفنان، 2 الأحدث، 3 المدة
     var vidSort by mutableIntStateOf(0)          // 0 الأحدث، 1 الاسم، 2 الأطول، 3 الأكبر
@@ -95,7 +95,7 @@ object Prefs {
         longSpeed = sp.getBoolean("ls", true); defaultSpeed = sp.getFloat("ds", 1f)
         dtCenter = sp.getBoolean("dc", true); subColor = sp.getInt("sc", 0); subBg = sp.getBoolean("sb", false)
         amoled = sp.getBoolean("am", false); skipSilence = sp.getBoolean("sl", false); skipIntro = sp.getInt("si", 85)
-        minAudioSec = sp.getInt("ma", 30); restoreQueue = sp.getBoolean("rq", true)
+        minAudioSec = sp.getInt("ma", 0); restoreQueue = sp.getBoolean("rq", true)
         songSort = sp.getInt("so", 0); vidSort = sp.getInt("vo", 0)
         eqOn = sp.getBoolean("eo", false); eqLevels = sp.getString("el", "") ?: ""
         bassStr = sp.getInt("bs", 0); virtStr = sp.getInt("vs", 0)
@@ -188,8 +188,11 @@ object Media {
             MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.ALBUM_ID, MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATE_ADDED, MediaStore.MediaColumns.RELATIVE_PATH
         )
-        val sel = MediaStore.Audio.Media.DURATION + " >= ? AND " + MediaStore.Audio.Media.IS_RINGTONE + " = 0 AND " +
-            MediaStore.Audio.Media.IS_NOTIFICATION + " = 0 AND " + MediaStore.Audio.Media.IS_ALARM + " = 0"
+        val sel = "(" + MediaStore.Audio.Media.DURATION + " IS NULL OR " + MediaStore.Audio.Media.DURATION + " = 0 OR " +
+            MediaStore.Audio.Media.DURATION + " >= ?) AND (" + MediaStore.Audio.Media.IS_RINGTONE + " IS NULL OR " +
+            MediaStore.Audio.Media.IS_RINGTONE + " = 0) AND (" + MediaStore.Audio.Media.IS_NOTIFICATION + " IS NULL OR " +
+            MediaStore.Audio.Media.IS_NOTIFICATION + " = 0) AND (" + MediaStore.Audio.Media.IS_ALARM + " IS NULL OR " +
+            MediaStore.Audio.Media.IS_ALARM + " = 0)"
         val args = arrayOf((Prefs.minAudioSec * 1000L).toString())
         try {
             c.contentResolver.query(base, proj, sel, args, MediaStore.Audio.Media.TITLE + " COLLATE LOCALIZED ASC")?.use { q ->

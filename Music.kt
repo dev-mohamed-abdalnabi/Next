@@ -33,6 +33,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -229,23 +230,46 @@ fun MusicScreen(bottom: Dp) {
             ) {
                 item(span = full) {
                     Row(
-                        Modifier.fillMaxWidth().statusBarsPadding().padding(top = 24.dp, bottom = 12.dp),
+                        Modifier.fillMaxWidth().statusBarsPadding().padding(top = 8.dp, bottom = 0.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Next", style = MaterialTheme.typography.titleMedium, color = cs.primary)
-                            Text("الموسيقى", style = MaterialTheme.typography.displaySmall)
-                            if (all.isNotEmpty()) Text("${all.size} أغنية", style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant)
+                            Text("الموسيقى", style = MaterialTheme.typography.headlineMedium)
+                            Text(
+                                if (all.isNotEmpty()) "Next · ${all.size} أغنية" else "Next",
+                                style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant
+                            )
                         }
-                        CookieIcon(Ic.Music, 72.dp, cs.tertiary, cs.onTertiary)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (sub == 0) Box {
+                                IconButton({ sortMenu = true }) { Icon(Icons.Rounded.Menu, "القائمة") }
+                                DropdownMenu(sortMenu, { sortMenu = false }) {
+                                    if (songs.isNotEmpty()) {
+                                        DropdownMenuItem(text = { Text("تشغيل الكل") }, leadingIcon = { Icon(Ic.Play, null) },
+                                            onClick = { sortMenu = false; Music.play(songs, 0) })
+                                        DropdownMenuItem(text = { Text("عشوائي") }, leadingIcon = { Icon(Ic.Shuffle, null) },
+                                            onClick = { sortMenu = false; Music.shuffleAll(songs) })
+                                        HorizontalDivider()
+                                    }
+                                    SongSortNames.forEachIndexed { i, n ->
+                                        DropdownMenuItem(
+                                            text = { Text("ترتيب: $n") },
+                                            leadingIcon = { if (sortKey.coerceIn(0, 3) == i) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                                            onClick = { Prefs.songSort = i; Prefs.save(); sortMenu = false }
+                                        )
+                                    }
+                                }
+                            }
+                            CookieIcon(Ic.Music, 44.dp, cs.tertiary, cs.onTertiary)
+                        }
                     }
                 }
                 if (sub != 3) item(span = full) {
                     TextField(
                         value = q, onValueChange = { q = it }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp),
-                        shape = RoundedCornerShape(30.dp), colors = fieldColors(),
-                        placeholder = { Text("ابحث عن أغنية أو فنان أو ألبوم") },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                        shape = RoundedCornerShape(26.dp), colors = fieldColors(),
+                        placeholder = { Text("ابحث عن أغنية أو فنان أو ألبوم", maxLines = 1) },
                         leadingIcon = { Icon(Icons.Rounded.Search, null) },
                         trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Icons.Rounded.Close, "مسح") } }
                     )
@@ -258,28 +282,6 @@ fun MusicScreen(bottom: Dp) {
                     EmptyState(Ic.Music, "مفيش أغاني", "لما يبقى فيه موسيقى على جهازك هتظهر هنا.")
                 } else when (sub) {
                     0 -> {
-                        item(span = full) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                FilledTonalButton({ Music.play(songs, 0) }, enabled = songs.isNotEmpty()) {
-                                    Icon(Ic.Play, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("تشغيل الكل")
-                                }
-                                OutlinedButton({ Music.shuffleAll(songs) }, enabled = songs.isNotEmpty()) {
-                                    Icon(Ic.Shuffle, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("عشوائي")
-                                }
-                                Spacer(Modifier.weight(1f))
-                                Box {
-                                    AssistChip(
-                                        onClick = { sortMenu = true }, label = { Text(SongSortNames[sortKey.coerceIn(0, 3)]) },
-                                        leadingIcon = { Icon(Ic.Sort, null, Modifier.size(18.dp)) }
-                                    )
-                                    DropdownMenu(sortMenu, { sortMenu = false }) {
-                                        SongSortNames.forEachIndexed { i, n ->
-                                            DropdownMenuItem({ Text(n) }, { Prefs.songSort = i; Prefs.save(); sortMenu = false })
-                                        }
-                                    }
-                                }
-                            }
-                        }
                         if (songs.isEmpty()) item(span = full) { EmptyState(Icons.Rounded.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
                         items(songs, key = { it.id }, span = { GridItemSpan(maxLineSpan) }) { s ->
                             SongRow(

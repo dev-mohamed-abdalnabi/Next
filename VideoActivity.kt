@@ -99,6 +99,7 @@ class VState {
     var controls by mutableStateOf(true)
     var touch by mutableIntStateOf(0)
     var pip by mutableStateOf(false)
+    var bgAudio by mutableStateOf(false)         // تشغيل صوت فقط في الخلفية
     var orient by mutableIntStateOf(0)
     var panel by mutableIntStateOf(0)            // 0 مفيش، 1 سرعة، 2 مسارات، 3 القائمة، 4 المزيد، 5 معلومات
     var boost by mutableStateOf(false)
@@ -198,6 +199,7 @@ class VideoActivity : ComponentActivity() {
                 AudioAttributes.Builder().setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).setUsage(C.USAGE_MEDIA).build(), true
             )
             .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         player.pauseAtEndOfMediaItems = !Prefs.autoNext
         attachEnhancer()
@@ -528,10 +530,26 @@ class VideoActivity : ComponentActivity() {
         savePos()
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (::player.isInitialized) setVideoOff(false)
+    }
+
+    fun setVideoOff(off: Boolean) {
+        try {
+            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, off).build()
+        } catch (_: Throwable) {}
+    }
+
+    fun toggleBgAudio() { vs.bgAudio = !vs.bgAudio }
+
     override fun onStop() {
         super.onStop()
         savePos()
-        if (!isInPictureInPictureMode) player.pause()
+        if (!isInPictureInPictureMode) {
+            if (vs.bgAudio) setVideoOff(true) else player.pause()
+        }
     }
 
     override fun onDestroy() {
@@ -811,6 +829,8 @@ fun VideoUi(a: VideoActivity) {
                                 if (vs.count > 1) Text("${vs.index + 1} / ${vs.count}", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium)
                             }
                             if (vs.count > 1) CtlBtn(Ic.Queue, { vs.panel = 3 }, desc = "القائمة")
+                            CtlBtn(Ic.Headphones, { a.toggleBgAudio() }, active = vs.bgAudio, desc = "تشغيل صوت فقط")
+                            if (Build.VERSION.SDK_INT >= 26) CtlBtn(Ic.Pip, { a.enterPip() }, desc = "نافذة عايمة")
                             CtlBtn(Ic.Subs, { vs.panel = 2 }, active = !vs.textOff, desc = "الصوت والترجمة")
                             CtlBtn(Ic.More, { vs.panel = 4 }, active = vs.abB > 0 || vs.sleepEnd > 0 || vs.gain > 0 || vs.muted, desc = "المزيد")
                         }
@@ -928,6 +948,7 @@ fun VideoUi(a: VideoActivity) {
                                 OptionRow(if (vs.muted) "إلغاء كتم الصوت" else "كتم الصوت", vs.muted) { a.toggleMute() }
                                 OptionRow("تخطي ${Prefs.skipIntro} ثانية", false) { vs.panel = 0; a.skipIntro() }
                                 if (Build.VERSION.SDK_INT >= 26) OptionRow("نافذة عايمة", false) { vs.panel = 0; a.enterPip() }
+                                OptionRow(if (vs.bgAudio) "إيقاف التشغيل كصوت فقط" else "تشغيل كصوت فقط (يكمل في الخلفية)", vs.bgAudio) { a.toggleBgAudio() }
                                 OptionRow("معلومات الفيديو", false) { vs.panel = 5 }
 
                                 Text("تضخيم الصوت", style = MaterialTheme.typography.titleSmall, color = cs.primary, modifier = Modifier.padding(start = 8.dp, top = 14.dp))

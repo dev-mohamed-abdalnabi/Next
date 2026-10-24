@@ -14,7 +14,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -24,6 +26,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -123,6 +126,41 @@ fun VideoScreen(bottom: Dp) {
 
     val full: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
 
+    var menu by remember { mutableStateOf(false) }
+    val menuBtn: @Composable () -> Unit = {
+        Box {
+            IconButton({ menu = true }) { Icon(Icons.Rounded.Menu, "القائمة") }
+            DropdownMenu(menu, { menu = false }) {
+                if (list.isNotEmpty() && (mode != 1 || folder != null)) {
+                    DropdownMenuItem(text = { Text("تشغيل الكل") }, leadingIcon = { Icon(Icons.Rounded.PlayArrow, null) },
+                        onClick = { menu = false; openVideo(ctx, list, 0) })
+                    DropdownMenuItem(text = { Text("عشوائي") }, leadingIcon = { Icon(Ic.Shuffle, null) },
+                        onClick = { menu = false; openVideo(ctx, list.shuffled(), 0) })
+                }
+                DropdownMenuItem(text = { Text("تشغيل من رابط") }, leadingIcon = { Icon(Ic.Link, null) },
+                    onClick = { menu = false; urlDlg = true })
+                if (folder == null) {
+                    HorizontalDivider()
+                    listOf("الكل", "المجلدات", "المفضلة").forEachIndexed { i, l ->
+                        DropdownMenuItem(
+                            text = { Text(l) },
+                            leadingIcon = { if (mode == i) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                            onClick = { mode = i; menu = false }
+                        )
+                    }
+                }
+                HorizontalDivider()
+                SortNames.forEachIndexed { i, n ->
+                    DropdownMenuItem(
+                        text = { Text("ترتيب: $n") },
+                        leadingIcon = { if (sortKey.coerceIn(0, 3) == i) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                        onClick = { Prefs.vidSort = i; Prefs.save(); menu = false }
+                    )
+                }
+            }
+        }
+    }
+
     // توهّج لوني ناعم ثابت في أعلى الشاشة
     Box(
         Modifier.fillMaxSize().drawBehind {
@@ -137,19 +175,24 @@ fun VideoScreen(bottom: Dp) {
         LazyVerticalGrid(
             GridCells.Fixed(2), Modifier.fillMaxSize().imePadding(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = bottom),
-            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(18.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item(span = full) {
                 if (folder == null) Row(
-                    Modifier.fillMaxWidth().statusBarsPadding().padding(top = 24.dp, bottom = 12.dp),
+                    Modifier.fillMaxWidth().statusBarsPadding().padding(top = 8.dp, bottom = 0.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column {
-                        Text("Next", style = MaterialTheme.typography.titleMedium, color = cs.primary)
-                        Text("الفيديو", style = MaterialTheme.typography.displaySmall)
-                        if (all.isNotEmpty()) Text("${all.size} فيديو", style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant)
+                        Text("الفيديو", style = MaterialTheme.typography.headlineMedium)
+                        Text(
+                            if (all.isNotEmpty()) "Next · ${all.size} فيديو" else "Next",
+                            style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant
+                        )
                     }
-                    CookieIcon(Ic.Video, 72.dp, cs.primary, cs.onPrimary)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        menuBtn()
+                        CookieIcon(Ic.Video, 44.dp, cs.primary, cs.onPrimary)
+                    }
                 } else Row(
                     Modifier.fillMaxWidth().statusBarsPadding().padding(top = 16.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -159,6 +202,8 @@ fun VideoScreen(bottom: Dp) {
                         Text(folder ?: "", style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${list.size} فيديو", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     }
+                    Spacer(Modifier.weight(1f))
+                    menuBtn()
                 }
             }
             if (selecting) item(span = full) {
@@ -177,45 +222,12 @@ fun VideoScreen(bottom: Dp) {
             item(span = full) {
                 TextField(
                     value = q, onValueChange = { q = it }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 60.dp),
-                    shape = RoundedCornerShape(30.dp), colors = fieldColors(),
-                    placeholder = { Text("ابحث في الفيديوهات") },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+                    shape = RoundedCornerShape(26.dp), colors = fieldColors(),
+                    placeholder = { Text("ابحث في الفيديوهات", maxLines = 1) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null) },
                     trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Icons.Rounded.Close, "مسح") } }
                 )
-            }
-            item(span = full) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (folder == null) listOf("الكل", "المجلدات", "المفضلة").forEachIndexed { i, l ->
-                        FilterChip(
-                            selected = mode == i, onClick = { mode = i }, label = { Text(l) },
-                            leadingIcon = if (mode == i) ({ Icon(Icons.Rounded.Check, null, Modifier.size(18.dp)) }) else null
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Box {
-                        AssistChip(
-                            onClick = { sortMenu = true }, label = { Text(SortNames[sortKey.coerceIn(0, 3)]) },
-                            leadingIcon = { Icon(Ic.Sort, null, Modifier.size(18.dp)) }
-                        )
-                        DropdownMenu(sortMenu, { sortMenu = false }) {
-                            SortNames.forEachIndexed { i, n ->
-                                DropdownMenuItem(text = { Text(n) }, onClick = { Prefs.vidSort = i; Prefs.save(); sortMenu = false })
-                            }
-                        }
-                    }
-                }
-            }
-            if (!selecting && (mode != 1 || folder != null)) item(span = full) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (list.isNotEmpty()) FilledTonalButton({ openVideo(ctx, list, 0) }) {
-                        Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp)); Spacer(Modifier.width(6.dp)); Text("تشغيل الكل")
-                    }
-                    if (list.isNotEmpty()) OutlinedButton({ val sh = list.shuffled(); openVideo(ctx, sh, 0) }) { Text("عشوائي") }
-                    OutlinedButton({ urlDlg = true }) {
-                        Icon(Ic.Link, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("رابط")
-                    }
-                }
             }
 
             if (cont.isNotEmpty() && mode == 0 && folder == null && q.isBlank() && !selecting) {
