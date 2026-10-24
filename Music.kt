@@ -745,10 +745,10 @@ fun NowPlaying(onClose: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(String.format(Locale.US, "%.2fx", Music.speed), Modifier.fillMaxWidth(), style = MaterialTheme.typography.displaySmall, color = cs.primary, textAlign = TextAlign.Center)
-                Slider(Music.speed, { Music.setSpeed(((it * 20).roundToInt() / 20f)) }, valueRange = 0.5f..2f)
+                Slider(Music.speed, { Music.changeSpeed(((it * 20).roundToInt() / 20f)) }, valueRange = 0.5f..2f)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(0.75f, 1f, 1.25f, 1.5f).forEach { v ->
-                        FilterChip(Music.speed == v, { Music.setSpeed(v) }, { Text(if (v == 1f) "1x" else "${v}x", maxLines = 1) }, Modifier.weight(1f))
+                        FilterChip(Music.speed == v, { Music.changeSpeed(v) }, { Text(if (v == 1f) "1x" else "${v}x", maxLines = 1) }, Modifier.weight(1f))
                     }
                 }
             }

@@ -478,7 +478,7 @@ class VideoActivity : ComponentActivity() {
         vs.toast(listOf("تدوير تلقائي", "أفقي", "طولي")[vs.orient])
     }
 
-    fun setBrightness(b: Float) {
+    fun applyBrightness(b: Float) {
         brightness = b.coerceIn(0.02f, 1f)
         val lp = window.attributes; lp.screenBrightness = brightness; window.attributes = lp
     }
@@ -708,7 +708,7 @@ fun VideoUi(a: VideoActivity) {
                                 }
                                 2 -> {
                                     briF = (briF - d.y / size.height * 1.3f).coerceIn(0.02f, 1f)
-                                    a.setBrightness(briF)
+                                    a.applyBrightness(briF)
                                     vs.hud(1, briF, "${(briF * 100).roundToInt()}%")
                                 }
                                 3 -> {

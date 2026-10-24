@@ -341,7 +341,7 @@ object Music {
         }
     }
 
-    fun setSpeed(s: Float) = withCtl { it.setPlaybackSpeed(s) }
+    fun changeSpeed(s: Float) = withCtl { it.setPlaybackSpeed(s) }
 
     fun setSkipSilence(on: Boolean) {
         Prefs.skipSilence = on; Prefs.save()
