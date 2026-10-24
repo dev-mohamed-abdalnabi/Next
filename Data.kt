@@ -181,46 +181,54 @@ object Media {
     }
 
     private fun querySongs(c: Context): List<Song> {
-        val out = ArrayList<Song>()
         val base = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val proj = arrayOf(
             MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.ALBUM_ID, MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATE_ADDED, MediaStore.MediaColumns.RELATIVE_PATH
         )
-        val sel = "(" + MediaStore.Audio.Media.DURATION + " IS NULL OR " + MediaStore.Audio.Media.DURATION + " = 0 OR " +
-            MediaStore.Audio.Media.DURATION + " >= ?) AND (" + MediaStore.Audio.Media.IS_RINGTONE + " IS NULL OR " +
-            MediaStore.Audio.Media.IS_RINGTONE + " = 0) AND (" + MediaStore.Audio.Media.IS_NOTIFICATION + " IS NULL OR " +
-            MediaStore.Audio.Media.IS_NOTIFICATION + " = 0) AND (" + MediaStore.Audio.Media.IS_ALARM + " IS NULL OR " +
-            MediaStore.Audio.Media.IS_ALARM + " = 0)"
-        val args = arrayOf((Prefs.minAudioSec * 1000L).toString())
-        try {
-            c.contentResolver.query(base, proj, sel, args, MediaStore.Audio.Media.TITLE + " COLLATE LOCALIZED ASC")?.use { q ->
-                val iId = q.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-                val iTi = q.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-                val iAr = q.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-                val iAl = q.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-                val iAi = q.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-                val iDu = q.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-                val iAd = q.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
-                val iRp = q.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
-                while (q.moveToNext()) {
-                    val id = q.getLong(iId)
-                    val artist = q.getString(iAr)?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: "فنان غير معروف"
-                    val album = q.getString(iAl)?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: "ألبوم غير معروف"
-                    val rp = if (iRp >= 0) q.getString(iRp) else null
-                    out.add(
-                        Song(
-                            id, ContentUris.withAppendedId(base, id).toString(),
-                            q.getString(iTi)?.takeIf { it.isNotBlank() } ?: "بدون عنوان",
-                            artist, album, q.getLong(iAi), q.getLong(iDu), q.getLong(iAd),
-                            rp?.trim('/')?.substringAfterLast('/') ?: ""
+        val minMs = Prefs.minAudioSec * 1000L
+        // المحاولة الأولى: بفلتر بسيط من غير ترتيب SQL (الترتيب بـ COLLATE بيرمي خطأ على أندرويد الجديد)
+        // والمحاولة التانية: من غير أي فلتر، والفلترة بتتم هنا في الكود
+        val attempts = listOf<Pair<String?, Array<String>?>>(
+            Pair("(" + MediaStore.Audio.Media.IS_RINGTONE + " IS NULL OR " + MediaStore.Audio.Media.IS_RINGTONE + " = 0) AND (" +
+                MediaStore.Audio.Media.IS_NOTIFICATION + " IS NULL OR " + MediaStore.Audio.Media.IS_NOTIFICATION + " = 0) AND (" +
+                MediaStore.Audio.Media.IS_ALARM + " IS NULL OR " + MediaStore.Audio.Media.IS_ALARM + " = 0)", null),
+            Pair(null, null)
+        )
+        for ((sel, args) in attempts) {
+            val out = ArrayList<Song>()
+            try {
+                c.contentResolver.query(base, proj, sel, args, null)?.use { q ->
+                    val iId = q.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                    val iTi = q.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                    val iAr = q.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                    val iAl = q.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                    val iAi = q.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                    val iDu = q.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                    val iAd = q.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                    val iRp = q.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+                    while (q.moveToNext()) {
+                        val dur = if (q.isNull(iDu)) 0L else q.getLong(iDu)
+                        if (dur in 1 until minMs) continue
+                        val id = q.getLong(iId)
+                        val artist = q.getString(iAr)?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: "فنان غير معروف"
+                        val album = q.getString(iAl)?.takeIf { it.isNotBlank() && it != "<unknown>" } ?: "ألبوم غير معروف"
+                        val rp = if (iRp >= 0) q.getString(iRp) else null
+                        out.add(
+                            Song(
+                                id, ContentUris.withAppendedId(base, id).toString(),
+                                q.getString(iTi)?.takeIf { it.isNotBlank() } ?: "بدون عنوان",
+                                artist, album, q.getLong(iAi), dur, q.getLong(iAd),
+                                rp?.trim('/')?.substringAfterLast('/') ?: ""
+                            )
                         )
-                    )
+                    }
                 }
-            }
-        } catch (_: Throwable) {}
-        return out
+            } catch (_: Throwable) {}
+            if (out.isNotEmpty()) return out.sortedBy { it.title.lowercase() }
+        }
+        return emptyList()
     }
 }
 
