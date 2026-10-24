@@ -68,6 +68,7 @@ object Prefs {
     var amoled by mutableStateOf(false)          // وضع AMOLED أسود تمامًا
     var skipSilence by mutableStateOf(false)     // تخطي الصمت في الموسيقى
     var skipIntro by mutableIntStateOf(85)       // ثواني زر التخطي في الفيديو
+    var videoListStyle by mutableIntStateOf(0)   // 0 شبكة، 1 قائمة يوتيوب
 
     // الموسيقى
     var minAudioSec by mutableIntStateOf(0)     // تجاهل الملفات الأقصر من كده
@@ -95,6 +96,7 @@ object Prefs {
         longSpeed = sp.getBoolean("ls", true); defaultSpeed = sp.getFloat("ds", 1f)
         dtCenter = sp.getBoolean("dc", true); subColor = sp.getInt("sc", 0); subBg = sp.getBoolean("sb", false)
         amoled = sp.getBoolean("am", false); skipSilence = sp.getBoolean("sl", false); skipIntro = sp.getInt("si", 85)
+        videoListStyle = sp.getInt("vls", 0)
         minAudioSec = sp.getInt("ma", 0); restoreQueue = sp.getBoolean("rq", true)
         songSort = sp.getInt("so", 0); vidSort = sp.getInt("vo", 0)
         eqOn = sp.getBoolean("eo", false); eqLevels = sp.getString("el", "") ?: ""
@@ -111,6 +113,7 @@ object Prefs {
             .putBoolean("ls", longSpeed).putFloat("ds", defaultSpeed)
             .putBoolean("dc", dtCenter).putInt("sc", subColor).putBoolean("sb", subBg)
             .putBoolean("am", amoled).putBoolean("sl", skipSilence).putInt("si", skipIntro)
+            .putInt("vls", videoListStyle)
             .putInt("ma", minAudioSec).putBoolean("rq", restoreQueue)
             .putInt("so", songSort).putInt("vo", vidSort)
             .putBoolean("eo", eqOn).putString("el", eqLevels).putInt("bs", bassStr).putInt("vs", virtStr)
@@ -243,7 +246,7 @@ fun deleteMedia(c: Context, uris: List<Uri>, launch: (IntentSender) -> Unit): Bo
     true
 } catch (_: Throwable) { false }
 
-// ═══════════════════════════ المفضلة + القوائم + السجل + أماكن التوقف ═════════════[...]
+// ═══════════════════════════ المفضلة + القوائم + السجل + أماكن التوقف ════════════════[...]
 
 object Store {
     private lateinit var sp: SharedPreferences
@@ -418,21 +421,20 @@ object Store {
     }
 }
 
-// ═══════════════════════════ صور مصغّرة (فيديو + أغلفة ألبومات) ════════════════[...]
+// ═══════════════════════════ صور مصغّرة (فيديو + أغلفة ألبومات) ════════════════�[...]
 
 object Thumbs {
-    private val cache = LruCache<String, Bitmap>(96)
+    private val cache = LruCache<String, Bitmap>(160)
     private val failed = HashSet<String>()
 
     fun peek(uri: String, px: Int): Bitmap? = cache.get("$uri@$px")
 
     fun load(c: Context, uri: String, px: Int): Bitmap? {
-        val target = px.coerceIn(64, 180)
-        val key = "$uri@$target"
+        val key = "$uri@$px"
         cache.get(key)?.let { return it }
         if (synchronized(failed) { key in failed }) return null
         return try {
-            c.contentResolver.loadThumbnail(Uri.parse(uri), Size(target, target), null).also { cache.put(key, it) }
+            c.contentResolver.loadThumbnail(Uri.parse(uri), Size(px, px), null).also { cache.put(key, it) }
         } catch (_: Throwable) {
             synchronized(failed) { failed.add(key) }
             null
