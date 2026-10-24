@@ -11,12 +11,17 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -51,14 +56,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -73,7 +81,6 @@ private fun shareSong(c: Context, s: Song) = try {
     c.startActivity(Intent.createChooser(i, null))
 } catch (_: Throwable) {}
 
-// القوائم الذكية + قوائم الألبومات والفنانين والقوائم اللي المستخدم عملها
 private fun listFor(key: String): List<Song> = when {
     key == "fav" -> Media.songs.filter { it.id in Store.favs }
     key == "top" -> Media.songs.filter { (Store.plays[it.id] ?: 0) > 0 }.sortedByDescending { Store.plays[it.id] ?: 0 }.take(100)
@@ -159,7 +166,6 @@ fun MusicScreen(bottom: Dp) {
     ) {
         val d = detail
         if (d != null) {
-            // ─── صفحة تفاصيل: ألبوم / فنان / قائمة ───
             val list = listFor(d)
             val title = titleFor(d, list)
             val isPl = d.startsWith("pl:")
@@ -487,17 +493,55 @@ private fun AddToPlaylistDialog(ids: List<Long>, onDismiss: () -> Unit) {
 // ═══════════════════════════ المشغّل المصغّر ═══════════════════════════
 
 @Composable
-fun MiniPlayer(onOpen: () -> Unit) {
+fun MiniPlayer(onOpen: () -> Unit, onDismiss: () -> Unit = { Music.dismiss() }) {
     val s = Music.current ?: return
     val cs = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
     var pos by remember { mutableLongStateOf(0L) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    val threshold = remember(density) { with(density) { 50.dp.toPx() } }
+
+    LaunchedEffect(s) { offsetY = 0f }
     LaunchedEffect(Music.playing, s) {
         while (true) { pos = Music.position(); delay(if (Music.playing) 500 else 1500) }
     }
     val frac = if (Music.duration > 0) (pos.toFloat() / Music.duration).coerceIn(0f, 1f) else 0f
+    val alphaVal = (1f - (offsetY / (threshold * 2.2f))).coerceIn(0f, 1f)
+
     Surface(
         onClick = onOpen, shape = RoundedCornerShape(30.dp), color = cs.primaryContainer,
-        shadowElevation = 8.dp, modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
+        shadowElevation = (8.dp * alphaVal),
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .offset { IntOffset(0, offsetY.roundToInt()) }
+            .graphicsLayer { alpha = alphaVal }
+            .draggable(
+                orientation = Orientation.Vertical,
+                state = rememberDraggableState { delta ->
+                    offsetY = (offsetY + delta).coerceAtLeast(0f)
+                },
+                onDragStopped = { velocity ->
+                    // إذا كان السحب سريعاً لأسفل أو تجاوز المسافة المحددة
+                    if (offsetY > threshold || (velocity > 600f && offsetY > 10f)) {
+                        scope.launch {
+                            val endY = with(density) { 120.dp.toPx() }
+                            Animatable(offsetY).animateTo(endY, tween(120)) {
+                                offsetY = value
+                            }
+                            onDismiss()
+                        }
+                    } else {
+                        // رجوع ناعم مكانه في حال السحب الخفيف غير المتعمد
+                        scope.launch {
+                            Animatable(offsetY).animateTo(0f, spring(0.75f, 600f)) {
+                                offsetY = value
+                            }
+                        }
+                    }
+                }
+            )
     ) {
         Column {
             Row(
