@@ -83,6 +83,12 @@ fun SettingsScreen(bottom: Dp) {
 
         item { SectionTitle("الفيديو") }
         item {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SettingRow(Ic.Video, "شكل قائمة الفيديوهات")
+                Switcher(listOf("شبكة", "قائمة يوتيوب"), Prefs.videoListStyle) { Prefs.videoListStyle = it; Prefs.save() }
+            }
+        }
+        item {
             SettingRow(Ic.Play, "كمّل من مكان ما وقفت", "الفيديو بيرجع لآخر نقطة شاهدتها", onClick = { Prefs.resume = !Prefs.resume; Prefs.save() }) {
                 Toggle(Prefs.resume) { Prefs.resume = it; Prefs.save() }
             }
