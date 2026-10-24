@@ -418,16 +418,16 @@ object Store {
     }
 }
 
-// ═══════════════════════════ صور مصغّرة (فيديو + أغلفة ألبومات) ════════════════�[...]
+// ═══════════════════════════ صور مصغّرة (فيديو + أغلفة ألبومات) ════════════════[...]
 
 object Thumbs {
-    private val cache = LruCache<String, Bitmap>(160)
+    private val cache = LruCache<String, Bitmap>(96)
     private val failed = HashSet<String>()
 
     fun peek(uri: String, px: Int): Bitmap? = cache.get("$uri@$px")
 
     fun load(c: Context, uri: String, px: Int): Bitmap? {
-        val target = px.coerceIn(64, 256)
+        val target = px.coerceIn(64, 180)
         val key = "$uri@$target"
         cache.get(key)?.let { return it }
         if (synchronized(failed) { key in failed }) return null
