@@ -119,7 +119,7 @@ object Prefs {
     }
 }
 
-// ═══════════════════════════ فحص الملفات من MediaStore ═══════════════════════════
+// ═══════════════════════════ فحص الملفات من MediaStore ════════════════════════[...]
 
 object Media {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -243,7 +243,7 @@ fun deleteMedia(c: Context, uris: List<Uri>, launch: (IntentSender) -> Unit): Bo
     true
 } catch (_: Throwable) { false }
 
-// ═══════════════════════════ المفضلة + القوائم + السجل + أماكن التوقف ═══════════════════════════
+// ═══════════════════════════ المفضلة + القوائم + السجل + أماكن التوقف ═════════════[...]
 
 object Store {
     private lateinit var sp: SharedPreferences
@@ -418,7 +418,7 @@ object Store {
     }
 }
 
-// ═══════════════════════════ صور مصغّرة (فيديو + أغلفة ألبومات) ═══════════════════════════
+// ═══════════════════════════ صور مصغّرة (فيديو + أغلفة ألبومات) ════════════════�[...]
 
 object Thumbs {
     private val cache = LruCache<String, Bitmap>(160)
@@ -427,11 +427,12 @@ object Thumbs {
     fun peek(uri: String, px: Int): Bitmap? = cache.get("$uri@$px")
 
     fun load(c: Context, uri: String, px: Int): Bitmap? {
-        val key = "$uri@$px"
+        val target = px.coerceIn(64, 256)
+        val key = "$uri@$target"
         cache.get(key)?.let { return it }
         if (synchronized(failed) { key in failed }) return null
         return try {
-            c.contentResolver.loadThumbnail(Uri.parse(uri), Size(px, px), null).also { cache.put(key, it) }
+            c.contentResolver.loadThumbnail(Uri.parse(uri), Size(target, target), null).also { cache.put(key, it) }
         } catch (_: Throwable) {
             synchronized(failed) { failed.add(key) }
             null
