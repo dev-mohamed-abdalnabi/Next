@@ -1,0 +1,2 @@
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-assumenosideeffects class android.util.Log { public static *** d(...); public static *** v(...); public static *** i(...); }
