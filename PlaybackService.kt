@@ -39,7 +39,6 @@ class PlaybackService : MediaSessionService() {
     private var session: MediaSession? = null
 
     companion object {
-        // نفس العملية: الواجهة بتتحكم في الخصائص اللي مش موجودة في MediaController (زي تخطي الصمت)
         var exo: ExoPlayer? = null
     }
 
@@ -281,7 +280,7 @@ object Music {
         val n = c.mediaItemCount
         if (n == 0) return
         val ids = (0 until n).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() }
-        if (ids.size != n) return   // فيها ملف خارجي: ما نحفظش
+        if (ids.size != n) return
         Prefs.lastQueue = ids.joinToString(",")
         Prefs.lastIndex = c.currentMediaItemIndex
         Prefs.lastPos = c.currentPosition
@@ -348,7 +347,6 @@ object Music {
         try { PlaybackService.exo?.skipSilenceEnabled = on } catch (_: Throwable) {}
     }
 
-    // امسح كل القايمة ما عدا الأغنية الشغّالة
     fun clearQueue() = withCtl { c ->
         val i = c.currentMediaItemIndex
         if (c.mediaItemCount == 0 || i < 0) return@withCtl
@@ -356,7 +354,6 @@ object Music {
         if (i > 0) c.removeMediaItems(0, i)
     }
 
-    // حرّك أغنية في القايمة لفوق أو لتحت
     fun moveUp(i: Int) = move(i, i - 1)
     fun moveDown(i: Int) = move(i, i + 1)
 
@@ -387,7 +384,6 @@ object Music {
         if (from in 0 until c.mediaItemCount && to in 0 until c.mediaItemCount) c.moveMediaItem(from, to)
     }
 
-    // ─── رجّع آخر جلسة (واقفة) لما التطبيق يفتح ───
     fun restore() {
         val c = ctl ?: return
         if (!Prefs.restoreQueue || c.mediaItemCount > 0 || Prefs.lastQueue.isBlank() || Media.byId.isEmpty()) return
@@ -418,5 +414,22 @@ object Music {
         sleepJob?.cancel()
         sleepEnd = 0L
         sleepAtTrackEnd = true
+    }
+
+    // ─── إغلاق المشغّل المصغّر وإخفاؤه ───
+    fun dismiss() {
+        sleepJob?.cancel()
+        sleepEnd = 0L
+        sleepAtTrackEnd = false
+        withCtl { c ->
+            saveSession(c)
+            c.stop()
+            c.clearMediaItems()
+        }
+        current = null
+        playing = false
+        queue = emptyList()
+        index = -1
+        duration = 0L
     }
 }
