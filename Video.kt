@@ -14,9 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -26,11 +24,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
@@ -55,7 +53,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
-// بيفتح مشغّل الفيديو بقائمة (الفيديوهات اللي ظاهرة) وبيبدأ من الفيديو المختار
 fun openVideo(c: Context, list: List<Vid>, index: Int) {
     VQ.items = list
     VQ.start = index.coerceIn(0, (list.size - 1).coerceAtLeast(0))
@@ -84,7 +81,6 @@ fun VideoScreen(bottom: Dp) {
     var mode by rememberSaveable { mutableIntStateOf(0) }
     var folder by rememberSaveable { mutableStateOf<String?>(null) }
     var sel by remember { mutableStateOf(setOf<String>()) }
-    var sortMenu by remember { mutableStateOf(false) }
     var urlDlg by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("") }
     var delTarget by remember { mutableStateOf<List<Vid>?>(null) }
@@ -125,6 +121,7 @@ fun VideoScreen(bottom: Dp) {
         .sortedByDescending { Store.vlast[it.uri] ?: 0L }.take(10)
 
     val full: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
+    val ytStyle = Prefs.videoListStyle == 1
 
     var menu by remember { mutableStateOf(false) }
     val menuBtn: @Composable () -> Unit = {
@@ -161,7 +158,6 @@ fun VideoScreen(bottom: Dp) {
         }
     }
 
-    // توهّج لوني ناعم ثابت في أعلى الشاشة
     Box(
         Modifier.fillMaxSize().drawBehind {
             drawRect(
@@ -173,9 +169,10 @@ fun VideoScreen(bottom: Dp) {
         }
     ) {
         LazyVerticalGrid(
-            GridCells.Fixed(2), Modifier.fillMaxSize().imePadding(),
+            GridCells.Fixed(if (ytStyle) 1 else 2), Modifier.fillMaxSize().imePadding(),
             contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = bottom),
-            horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (ytStyle) 0.dp else 14.dp),
+            verticalArrangement = Arrangement.spacedBy(if (ytStyle) 12.dp else 12.dp)
         ) {
             item(span = full) {
                 if (folder == null) Row(
@@ -184,10 +181,7 @@ fun VideoScreen(bottom: Dp) {
                 ) {
                     Column {
                         Text("الفيديو", style = MaterialTheme.typography.headlineMedium)
-                        Text(
-                            if (all.isNotEmpty()) "Next · ${all.size} فيديو" else "Next",
-                            style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant
-                        )
+                        Text(if (all.isNotEmpty()) "Next · ${all.size} فيديو" else "Next", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         menuBtn()
@@ -198,7 +192,7 @@ fun VideoScreen(bottom: Dp) {
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     IconButton({ folder = null }) { Icon(Ic.Back, "رجوع") }
-                    Column {
+                    Column { 
                         Text(folder ?: "", style = MaterialTheme.typography.headlineSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${list.size} فيديو", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                     }
@@ -206,6 +200,7 @@ fun VideoScreen(bottom: Dp) {
                     menuBtn()
                 }
             }
+
             if (selecting) item(span = full) {
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.secondaryContainer)
@@ -219,6 +214,7 @@ fun VideoScreen(bottom: Dp) {
                     IconButton({ sel = emptySet() }) { Icon(Icons.Rounded.Close, "إلغاء التحديد") }
                 }
             }
+
             item(span = full) {
                 TextField(
                     value = q, onValueChange = { q = it }, singleLine = true,
@@ -258,10 +254,9 @@ fun VideoScreen(bottom: Dp) {
                             }
                         }
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)))))
-                        Box(
-                            Modifier.align(Alignment.TopStart).padding(10.dp).clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.55f)).padding(7.dp)
-                        ) { Icon(Ic.Folder, null, Modifier.size(16.dp), tint = Color.White) }
+                        Box(Modifier.align(Alignment.TopStart).padding(10.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)).padding(7.dp)) {
+                            Icon(Ic.Folder, null, Modifier.size(16.dp), tint = Color.White)
+                        }
                         Column(Modifier.align(Alignment.BottomStart).padding(14.dp)) {
                             Text(name, color = Color.White, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${vids.size} فيديو", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelMedium)
@@ -274,17 +269,31 @@ fun VideoScreen(bottom: Dp) {
                     else EmptyState(Icons.Rounded.Search, "مفيش نتائج", "جرّب كلمة تانية.")
                 }
                 items(list, key = { it.uri }) { v ->
-                    VideoCard(
-                        v, selected = v.uri in sel,
-                        onClick = {
-                            if (selecting) sel = if (v.uri in sel) sel - v.uri else sel + v.uri
-                            else openVideo(ctx, list, list.indexOf(v))
-                        },
-                        onLong = { sel = if (v.uri in sel) sel - v.uri else sel + v.uri },
-                        fav = v.uri in vfavs, onFav = { Store.toggleVFav(v.uri) },
-                        onShare = { shareVids(ctx, listOf(v)) },
-                        onDelete = { delTarget = listOf(v) }
-                    )
+                    if (ytStyle) {
+                        YoutubeVideoCard(
+                            v, selected = v.uri in sel,
+                            onClick = {
+                                if (selecting) sel = if (v.uri in sel) sel - v.uri else sel + v.uri
+                                else openVideo(ctx, list, list.indexOf(v))
+                            },
+                            onLong = { sel = if (v.uri in sel) sel - v.uri else sel + v.uri },
+                            fav = v.uri in vfavs, onFav = { Store.toggleVFav(v.uri) },
+                            onShare = { shareVids(ctx, listOf(v)) },
+                            onDelete = { delTarget = listOf(v) }
+                        )
+                    } else {
+                        VideoCard(
+                            v, selected = v.uri in sel,
+                            onClick = {
+                                if (selecting) sel = if (v.uri in sel) sel - v.uri else sel + v.uri
+                                else openVideo(ctx, list, list.indexOf(v))
+                            },
+                            onLong = { sel = if (v.uri in sel) sel - v.uri else sel + v.uri },
+                            fav = v.uri in vfavs, onFav = { Store.toggleVFav(v.uri) },
+                            onShare = { shareVids(ctx, listOf(v)) },
+                            onDelete = { delTarget = listOf(v) }
+                        )
+                    }
                 }
             }
         }
@@ -296,7 +305,7 @@ fun VideoScreen(bottom: Dp) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    url, { url = it }, Modifier.fillMaxWidth(), singleLine = true,
+                    value = url, onValueChange = { url = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
                     placeholder = { Text("https://…/video.mp4 أو m3u8") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = {
@@ -304,7 +313,7 @@ fun VideoScreen(bottom: Dp) {
                         if (u.isNotEmpty()) { urlDlg = false; openVideo(ctx, listOf(streamVid(u)), 0) }
                     })
                 )
-                TextButton({ clip.getText()?.text?.let { url = it.trim() } }) { Text("لصق من الحافظة") }
+                TextButton({ LocalClipboardManager.current.getText()?.text?.let { url = it.trim() } }) { Text("لصق من الحافظة") }
                 Footnote("بيشغّل روابط الفيديو المباشرة (MP4 / MKV / HLS / DASH).")
             }
         },
@@ -361,10 +370,73 @@ private fun ContinueCard(v: Vid, onClick: () -> Unit) {
             if (v.dur > 0) ProgressLine(pos.toFloat() / v.dur, Modifier.align(Alignment.BottomCenter))
         }
         Text(v.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 4.dp))
-        if (v.dur > 0) Text(
-            "باقي ${fmtMs(v.dur - pos)}", style = MaterialTheme.typography.labelMedium,
-            color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp)
-        )
+        if (v.dur > 0) Text("باقي ${fmtMs(v.dur - pos)}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+    }
+}
+
+@Composable
+private fun YoutubeVideoCard(
+    v: Vid, selected: Boolean, onClick: () -> Unit, onLong: () -> Unit,
+    fav: Boolean, onFav: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    val pos = Store.vpos[v.uri] ?: 0L
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(24.dp))
+                .background(cs.surfaceContainerHigh).combinedClickable(onClick = onClick, onLongClick = onLong),
+            contentAlignment = Alignment.Center
+        ) {
+            MediaThumb(v.uri, Modifier.fillMaxSize(), 500) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CookieIcon(Ic.Video, 72.dp, cs.primaryContainer, cs.onPrimaryContainer, spin = false)
+                }
+            }
+            val tag = qTag(v.w, v.h)
+            if (tag.isNotEmpty()) Box(
+                Modifier.align(Alignment.TopStart).padding(10.dp).clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 9.dp, vertical = 4.dp)
+            ) { Text(tag, color = Color.White, style = MaterialTheme.typography.labelSmall) }
+            if (v.dur > 0) Box(
+                Modifier.align(Alignment.BottomEnd).padding(10.dp).clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 9.dp, vertical = 4.dp)
+            ) { Text(fmtMs(v.dur), color = Color.White, style = MaterialTheme.typography.labelSmall) }
+            if (pos > 0 && v.dur > 0) ProgressLine(pos.toFloat() / v.dur, Modifier.align(Alignment.BottomCenter))
+            if (selected) {
+                Box(Modifier.fillMaxSize().background(cs.primary.copy(alpha = 0.35f)))
+                Box(Modifier.align(Alignment.TopEnd).padding(10.dp).clip(CircleShape).background(cs.primary).padding(6.dp)) {
+                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = cs.onPrimary)
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(v.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    buildString {
+                        append(fmtSize(v.size))
+                        if (v.dur > 0) append(" • ")
+                        if (v.dur > 0) append(fmtMs(v.dur))
+                        val folderLabel = v.folder.takeIf { it.isNotBlank() && it != "غير مصنّف" }
+                        if (folderLabel != null) {
+                            append(" • ")
+                            append(folderLabel)
+                        }
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = cs.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                IconButton(onFav, Modifier.size(32.dp)) {
+                    Icon(if (fav) Ic.HeartFill else Ic.Heart, "مفضلة", Modifier.size(18.dp), tint = if (fav) cs.primary else cs.onSurfaceVariant)
+                }
+                IconButton(onShare, Modifier.size(32.dp)) { Icon(Icons.Rounded.Share, "مشاركة", Modifier.size(18.dp)) }
+                IconButton(onDelete, Modifier.size(32.dp)) { Icon(Icons.Rounded.Delete, "حذف", Modifier.size(18.dp), tint = cs.error) }
+            }
+        }
     }
 }
 
