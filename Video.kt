@@ -313,7 +313,7 @@ fun VideoScreen(bottom: Dp) {
                         if (u.isNotEmpty()) { urlDlg = false; openVideo(ctx, listOf(streamVid(u)), 0) }
                     })
                 )
-                TextButton({ LocalClipboardManager.current.getText()?.text?.let { url = it.trim() } }) { Text("لصق من الحافظة") }
+                TextButton({ clip.getText()?.text?.let { url = it.trim() } }) { Text("لصق من الحافظة") }
                 Footnote("بيشغّل روابط الفيديو المباشرة (MP4 / MKV / HLS / DASH).")
             }
         },
