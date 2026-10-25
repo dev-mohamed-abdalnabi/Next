@@ -38,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -124,12 +125,10 @@ fun VideoScreen(bottom: Dp) {
     val ytStyle = Prefs.videoListStyle == 1
 
     var menu by remember { mutableStateOf(false) }
-    val menuBtn: @Composable () -> Unit = {
-        Box {
-            IconButton({ menu = true }) { Icon(Icons.Rounded.Menu, "القائمة") }
-            DropdownMenu(menu, { menu = false }) {
+    val menuContent: @Composable () -> Unit = {
+        DropdownMenu(menu, { menu = false }) {
                 if (list.isNotEmpty() && (mode != 1 || folder != null)) {
-                    DropdownMenuItem(text = { Text("تشغيل الكل") }, leadingIcon = { Icon(Icons.Rounded.PlayArrow, null) },
+                    DropdownMenuItem(text = { Text("تشغيل الكل") }, leadingIcon = { Icon(Ic.Play, null) },
                         onClick = { menu = false; openVideo(ctx, list, 0) })
                     DropdownMenuItem(text = { Text("عشوائي") }, leadingIcon = { Icon(Ic.Shuffle, null) },
                         onClick = { menu = false; openVideo(ctx, list.shuffled(), 0) })
@@ -141,7 +140,7 @@ fun VideoScreen(bottom: Dp) {
                     listOf("الكل", "المجلدات", "المفضلة").forEachIndexed { i, l ->
                         DropdownMenuItem(
                             text = { Text(l) },
-                            leadingIcon = { if (mode == i) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                            leadingIcon = { if (mode == i) Icon(Ic.Check, null) else Spacer(Modifier.size(24.dp)) },
                             onClick = { mode = i; menu = false }
                         )
                     }
@@ -150,11 +149,23 @@ fun VideoScreen(bottom: Dp) {
                 SortNames.forEachIndexed { i, n ->
                     DropdownMenuItem(
                         text = { Text("ترتيب: $n") },
-                        leadingIcon = { if (sortKey.coerceIn(0, 3) == i) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                        leadingIcon = { if (sortKey.coerceIn(0, 3) == i) Icon(Ic.Check, null) else Spacer(Modifier.size(24.dp)) },
                         onClick = { Prefs.vidSort = i; Prefs.save(); menu = false }
                     )
                 }
             }
+    }
+    val menuBtn: @Composable () -> Unit = {
+        Box {
+            IconButton({ menu = true }) { Icon(Ic.Menu, "القائمة") }
+            menuContent()
+        }
+    }
+    // القائمة هي نفس الشكل (الكوكي) نفسه: بدل ما تبقى زرار جنبه
+    val menuCookie: @Composable () -> Unit = {
+        Box {
+            CookieIcon(Ic.Menu, 44.dp, cs.primary, cs.onPrimary, desc = "القائمة", onClick = { menu = true })
+            menuContent()
         }
     }
 
@@ -162,7 +173,7 @@ fun VideoScreen(bottom: Dp) {
         Modifier.fillMaxSize().drawBehind {
             drawRect(
                 Brush.radialGradient(
-                    listOf(cs.primaryContainer.copy(alpha = 0.85f), Color.Transparent),
+                    listOf(cs.primaryContainer.copy(alpha = 0.72f), Color.Transparent),
                     center = Offset(size.width * (if (rtl) 0.12f else 0.88f), size.height * 0.04f), radius = size.width * 0.95f
                 )
             )
@@ -183,10 +194,7 @@ fun VideoScreen(bottom: Dp) {
                         Text("الفيديو", style = MaterialTheme.typography.headlineMedium)
                         Text(if (all.isNotEmpty()) "Next · ${all.size} فيديو" else "Next", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        menuBtn()
-                        CookieIcon(Ic.Video, 44.dp, cs.primary, cs.onPrimary)
-                    }
+                    menuCookie()
                 } else Row(
                     Modifier.fillMaxWidth().statusBarsPadding().padding(top = 16.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -201,28 +209,14 @@ fun VideoScreen(bottom: Dp) {
                 }
             }
 
-            if (selecting) item(span = full) {
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(cs.secondaryContainer)
-                        .padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("${sel.size} محدد", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
-                    TextButton({ sel = list.map { it.uri }.toSet() }) { Text("الكل") }
-                    IconButton({ shareVids(ctx, all.filter { it.uri in sel }) }) { Icon(Icons.Rounded.Share, "مشاركة") }
-                    IconButton({ delTarget = all.filter { it.uri in sel } }) { Icon(Icons.Rounded.Delete, "حذف") }
-                    IconButton({ sel = emptySet() }) { Icon(Icons.Rounded.Close, "إلغاء التحديد") }
-                }
-            }
-
             item(span = full) {
                 TextField(
                     value = q, onValueChange = { q = it }, singleLine = true,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     shape = RoundedCornerShape(26.dp), colors = fieldColors(),
                     placeholder = { Text("ابحث في الفيديوهات", maxLines = 1) },
-                    leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                    trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Icons.Rounded.Close, "مسح") } }
+                    leadingIcon = { Icon(Ic.Search, null) },
+                    trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Ic.Close, "مسح") } }
                 )
             }
 
@@ -242,7 +236,7 @@ fun VideoScreen(bottom: Dp) {
             } else if (all.isEmpty()) item(span = full) {
                 EmptyState(Ic.Video, "مفيش فيديوهات", "لما يبقى فيه فيديوهات على جهازك هتظهر هنا.")
             } else if (mode == 1 && folder == null) {
-                if (folders.isEmpty()) item(span = full) { EmptyState(Icons.Rounded.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
+                if (folders.isEmpty()) item(span = full) { EmptyState(Ic.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
                 items(folders, key = { it.first }) { (name, vids) ->
                     Box(
                         Modifier.fillMaxWidth().aspectRatio(1.35f).clip(RoundedCornerShape(28.dp))
@@ -266,7 +260,7 @@ fun VideoScreen(bottom: Dp) {
             } else {
                 if (list.isEmpty()) item(span = full) {
                     if (mode == 2 && folder == null && q.isBlank()) EmptyState(Ic.Heart, "مفيش مفضلة لسه", "اضغط على القلب في أي فيديو عشان يظهر هنا.")
-                    else EmptyState(Icons.Rounded.Search, "مفيش نتائج", "جرّب كلمة تانية.")
+                    else EmptyState(Ic.Search, "مفيش نتائج", "جرّب كلمة تانية.")
                 }
                 items(list, key = { it.uri }) { v ->
                     if (ytStyle) {
@@ -296,6 +290,21 @@ fun VideoScreen(bottom: Dp) {
                     }
                 }
             }
+        }
+        // شريط التحديد: ثابت فوق الشاشة مهما كان مكان السكرول
+        if (selecting) Row(
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 8.dp)
+                .shadow(6.dp, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp)).background(cs.secondaryContainer)
+                .padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("${sel.size} محدد", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
+            TextButton({ sel = list.map { it.uri }.toSet() }) { Text("الكل") }
+            IconButton({ shareVids(ctx, all.filter { it.uri in sel }) }) { Icon(Ic.Share, "مشاركة") }
+            IconButton({ delTarget = all.filter { it.uri in sel } }) { Icon(Ic.Delete, "حذف") }
+            IconButton({ sel = emptySet() }) { Icon(Ic.Close, "إلغاء التحديد") }
         }
     }
 
@@ -405,7 +414,7 @@ private fun YoutubeVideoCard(
             if (selected) {
                 Box(Modifier.fillMaxSize().background(cs.primary.copy(alpha = 0.35f)))
                 Box(Modifier.align(Alignment.TopEnd).padding(10.dp).clip(CircleShape).background(cs.primary).padding(6.dp)) {
-                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = cs.onPrimary)
+                    Icon(Ic.Check, null, Modifier.size(16.dp), tint = cs.onPrimary)
                 }
             }
         }
@@ -433,8 +442,8 @@ private fun YoutubeVideoCard(
                 IconButton(onFav, Modifier.size(32.dp)) {
                     Icon(if (fav) Ic.HeartFill else Ic.Heart, "مفضلة", Modifier.size(18.dp), tint = if (fav) cs.primary else cs.onSurfaceVariant)
                 }
-                IconButton(onShare, Modifier.size(32.dp)) { Icon(Icons.Rounded.Share, "مشاركة", Modifier.size(18.dp)) }
-                IconButton(onDelete, Modifier.size(32.dp)) { Icon(Icons.Rounded.Delete, "حذف", Modifier.size(18.dp), tint = cs.error) }
+                IconButton(onShare, Modifier.size(32.dp)) { Icon(Ic.Share, "مشاركة", Modifier.size(18.dp)) }
+                IconButton(onDelete, Modifier.size(32.dp)) { Icon(Ic.Delete, "حذف", Modifier.size(18.dp), tint = cs.error) }
             }
         }
     }
@@ -471,7 +480,7 @@ private fun VideoCard(
             if (selected) {
                 Box(Modifier.fillMaxSize().background(cs.primary.copy(alpha = 0.35f)))
                 Box(Modifier.align(Alignment.TopEnd).padding(10.dp).clip(CircleShape).background(cs.primary).padding(6.dp)) {
-                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = cs.onPrimary)
+                    Icon(Ic.Check, null, Modifier.size(16.dp), tint = cs.onPrimary)
                 }
             }
         }
@@ -481,8 +490,8 @@ private fun VideoCard(
             IconButton(onFav, Modifier.size(36.dp)) {
                 Icon(if (fav) Ic.HeartFill else Ic.Heart, "مفضلة", Modifier.size(20.dp), tint = if (fav) cs.primary else cs.onSurfaceVariant)
             }
-            IconButton(onShare, Modifier.size(36.dp)) { Icon(Icons.Rounded.Share, "مشاركة", Modifier.size(20.dp)) }
-            IconButton(onDelete, Modifier.size(36.dp)) { Icon(Icons.Rounded.Delete, "حذف", Modifier.size(20.dp)) }
+            IconButton(onShare, Modifier.size(36.dp)) { Icon(Ic.Share, "مشاركة", Modifier.size(20.dp)) }
+            IconButton(onDelete, Modifier.size(36.dp)) { Icon(Ic.Delete, "حذف", Modifier.size(20.dp)) }
         }
     }
 }

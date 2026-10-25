@@ -158,7 +158,7 @@ fun MusicScreen(bottom: Dp) {
         Modifier.fillMaxSize().drawBehind {
             drawRect(
                 Brush.radialGradient(
-                    listOf(cs.tertiaryContainer.copy(alpha = 0.8f), Color.Transparent),
+                    listOf(cs.tertiaryContainer.copy(alpha = 0.68f), Color.Transparent),
                     center = Offset(size.width * (if (rtl) 0.12f else 0.88f), size.height * 0.04f), radius = size.width * 0.95f
                 )
             )
@@ -248,7 +248,7 @@ fun MusicScreen(bottom: Dp) {
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             if (sub == 0) Box {
-                                IconButton({ sortMenu = true }) { Icon(Icons.Rounded.Menu, "القائمة") }
+                                CookieIcon(Ic.Menu, 44.dp, cs.tertiary, cs.onTertiary, desc = "القائمة", onClick = { sortMenu = true })
                                 DropdownMenu(sortMenu, { sortMenu = false }) {
                                     if (songs.isNotEmpty()) {
                                         DropdownMenuItem(text = { Text("تشغيل الكل") }, leadingIcon = { Icon(Ic.Play, null) },
@@ -260,13 +260,13 @@ fun MusicScreen(bottom: Dp) {
                                     SongSortNames.forEachIndexed { i, n ->
                                         DropdownMenuItem(
                                             text = { Text("ترتيب: $n") },
-                                            leadingIcon = { if (sortKey.coerceIn(0, 3) == i) Icon(Icons.Rounded.Check, null) else Spacer(Modifier.size(24.dp)) },
+                                            leadingIcon = { if (sortKey.coerceIn(0, 3) == i) Icon(Ic.Check, null) else Spacer(Modifier.size(24.dp)) },
                                             onClick = { Prefs.songSort = i; Prefs.save(); sortMenu = false }
                                         )
                                     }
                                 }
                             }
-                            CookieIcon(Ic.Music, 44.dp, cs.tertiary, cs.onTertiary)
+                            else CookieIcon(Ic.Music, 44.dp, cs.tertiary, cs.onTertiary)
                         }
                     }
                 }
@@ -276,8 +276,8 @@ fun MusicScreen(bottom: Dp) {
                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                         shape = RoundedCornerShape(26.dp), colors = fieldColors(),
                         placeholder = { Text("ابحث عن أغنية أو فنان أو ألبوم", maxLines = 1) },
-                        leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                        trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Icons.Rounded.Close, "مسح") } }
+                        leadingIcon = { Icon(Ic.Search, null) },
+                        trailingIcon = { if (q.isNotEmpty()) IconButton({ q = "" }) { Icon(Ic.Close, "مسح") } }
                     )
                 }
                 item(span = full) { Switcher(listOf("الأغاني", "الألبومات", "الفنانين", "القوائم"), sub) { sub = it } }
@@ -288,7 +288,7 @@ fun MusicScreen(bottom: Dp) {
                     EmptyState(Ic.Music, "مفيش أغاني", "لما يبقى فيه موسيقى على جهازك هتظهر هنا.")
                 } else when (sub) {
                     0 -> {
-                        if (songs.isEmpty()) item(span = full) { EmptyState(Icons.Rounded.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
+                        if (songs.isEmpty()) item(span = full) { EmptyState(Ic.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
                         items(songs, key = { it.id }, span = { GridItemSpan(maxLineSpan) }) { s ->
                             SongRow(
                                 s, s.id == playingId, onClick = { Music.play(songs, songs.indexOf(s)) }, onAddPl = { addTo = listOf(s.id) },
@@ -297,7 +297,7 @@ fun MusicScreen(bottom: Dp) {
                         }
                     }
                     1 -> {
-                        if (albums.isEmpty()) item(span = full) { EmptyState(Icons.Rounded.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
+                        if (albums.isEmpty()) item(span = full) { EmptyState(Ic.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
                         items(albums, key = { it.id }) { al ->
                             Column(Modifier.clip(RoundedCornerShape(28.dp)).clickable { detail = "al:" + al.id }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 MediaThumb(al.songs[0].uri, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(28.dp)).background(cs.secondaryContainer), 400) {
@@ -311,7 +311,7 @@ fun MusicScreen(bottom: Dp) {
                         }
                     }
                     2 -> {
-                        if (artists.isEmpty()) item(span = full) { EmptyState(Icons.Rounded.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
+                        if (artists.isEmpty()) item(span = full) { EmptyState(Ic.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
                         items(artists, key = { it.first }, span = { GridItemSpan(maxLineSpan) }) { (name, l) ->
                             Row(
                                 Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).clickable { detail = "ar:$name" }.padding(6.dp),
@@ -730,7 +730,7 @@ fun NowPlaying(onClose: () -> Unit) {
                             Icon(Ic.Down, "لفوق", Modifier.size(18.dp).graphicsLayer { rotationZ = 180f })
                         }
                         if (i < Music.queue.size - 1) IconButton({ Music.moveDown(i) }, Modifier.size(32.dp)) { Icon(Ic.Down, "لتحت", Modifier.size(18.dp)) }
-                        if (!cur) IconButton({ Music.removeAt(i) }, Modifier.size(32.dp)) { Icon(Icons.Rounded.Close, "إزالة", Modifier.size(18.dp)) }
+                        if (!cur) IconButton({ Music.removeAt(i) }, Modifier.size(32.dp)) { Icon(Ic.Close, "إزالة", Modifier.size(18.dp)) }
                     }
                 }
             }

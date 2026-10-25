@@ -203,14 +203,25 @@ fun AppTheme(forceDark: Boolean = false, content: @Composable () -> Unit) {
 }
 
 // ═══════════════════════════ الأيقونات المرسومة ═══════════════════════════
+// طقم أيقونات جديد: خطوط رفيعة موحّدة (2dp) بأطراف مدوّرة، ومعاها أشكال مليانة مدوّرة للتحكّم في التشغيل
 
-private fun vec(name: String, fill: Boolean = false, w: Float = 2.2f, mirror: Boolean = false, b: PathBuilder.() -> Unit): ImageVector =
+private class Part(val fill: Boolean, val w: Float, val b: PathBuilder.() -> Unit)
+
+private fun outl(w: Float = 2f, b: PathBuilder.() -> Unit) = Part(false, w, b)
+private fun solid(w: Float = 1.6f, b: PathBuilder.() -> Unit) = Part(true, w, b)
+
+private fun vec(name: String, fill: Boolean = false, w: Float = 2f, mirror: Boolean = false, b: PathBuilder.() -> Unit): ImageVector =
+    vecM(name, mirror, Part(fill, w, b))
+
+private fun vecM(name: String, mirror: Boolean = false, vararg parts: Part): ImageVector =
     ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f, autoMirror = mirror).apply {
-        path(
-            fill = if (fill) SolidColor(Color.Black) else null,
-            stroke = SolidColor(Color.Black), strokeLineWidth = w,
-            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round, pathBuilder = b
-        )
+        parts.forEach { p ->
+            path(
+                fill = if (p.fill) SolidColor(Color.Black) else null,
+                stroke = SolidColor(Color.Black), strokeLineWidth = p.w,
+                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round, pathBuilder = p.b
+            )
+        }
     }.build()
 
 private fun PathBuilder.circle(cx: Float, cy: Float, r: Float) {
@@ -219,183 +230,224 @@ private fun PathBuilder.circle(cx: Float, cy: Float, r: Float) {
     arcTo(r, r, 0f, true, true, cx - r, cy)
 }
 
+// مستطيل بحواف مدوّرة
+private fun PathBuilder.rr(x: Float, y: Float, w: Float, h: Float, r: Float) {
+    moveTo(x + r, y); horizontalLineTo(x + w - r)
+    arcTo(r, r, 0f, false, true, x + w, y + r); verticalLineTo(y + h - r)
+    arcTo(r, r, 0f, false, true, x + w - r, y + h); horizontalLineTo(x + r)
+    arcTo(r, r, 0f, false, true, x, y + h - r); verticalLineTo(y + r)
+    arcTo(r, r, 0f, false, true, x + r, y); close()
+}
+
 object Ic {
-    val Play by lazy { vec("play", fill = true, w = 2f) {
-        moveTo(8f, 5.5f); lineTo(18.5f, 12f); lineTo(8f, 18.5f); close()
+    // ── التحكّم في التشغيل: أشكال مليانة بحواف مدوّرة ──
+    val Play by lazy { vec("play", fill = true, w = 3f) {
+        moveTo(8.7f, 6.7f); lineTo(17.4f, 12f); lineTo(8.7f, 17.3f); close()
     } }
-    val Pause by lazy { vec("pause", w = 4f) {
-        moveTo(8f, 5.5f); lineTo(8f, 18.5f)
-        moveTo(16f, 5.5f); lineTo(16f, 18.5f)
+    val Pause by lazy { vecM("pause", false,
+        solid(2.4f) { rr(7.4f, 6.2f, 2.2f, 11.6f, 1.1f); rr(14.4f, 6.2f, 2.2f, 11.6f, 1.1f) }
+    ) }
+    val Next by lazy { vecM("next", false,
+        solid(2.4f) { moveTo(6.8f, 7.6f); lineTo(14f, 12f); lineTo(6.8f, 16.4f); close() },
+        outl(2.6f) { moveTo(17.8f, 6.8f); verticalLineTo(17.2f) }
+    ) }
+    val Prev by lazy { vecM("prev", false,
+        solid(2.4f) { moveTo(17.2f, 7.6f); lineTo(10f, 12f); lineTo(17.2f, 16.4f); close() },
+        outl(2.6f) { moveTo(6.2f, 6.8f); verticalLineTo(17.2f) }
+    ) }
+    val Forward by lazy { vec("forward", fill = true, w = 2.2f) {
+        moveTo(5.6f, 7.6f); lineTo(11.2f, 12f); lineTo(5.6f, 16.4f); close()
+        moveTo(12.8f, 7.6f); lineTo(18.4f, 12f); lineTo(12.8f, 16.4f); close()
     } }
-    val Next by lazy { vec("next", fill = true, w = 2f) {
-        moveTo(6f, 6.5f); lineTo(15f, 12f); lineTo(6f, 17.5f); close()
-        moveTo(18f, 6f); lineTo(18f, 18f)
-    } }
-    val Prev by lazy { vec("prev", fill = true, w = 2f) {
-        moveTo(18f, 6.5f); lineTo(9f, 12f); lineTo(18f, 17.5f); close()
-        moveTo(6f, 6f); lineTo(6f, 18f)
+    val Backward by lazy { vec("backward", fill = true, w = 2.2f) {
+        moveTo(18.4f, 7.6f); lineTo(12.8f, 12f); lineTo(18.4f, 16.4f); close()
+        moveTo(11.2f, 7.6f); lineTo(5.6f, 12f); lineTo(11.2f, 16.4f); close()
     } }
     val Shuffle by lazy { vec("shuffle") {
-        moveTo(3f, 17f); lineTo(6f, 17f); curveTo(12f, 17f, 11f, 7f, 17f, 7f); lineTo(21f, 7f)
-        moveTo(18.5f, 4.5f); lineTo(21f, 7f); lineTo(18.5f, 9.5f)
-        moveTo(3f, 7f); lineTo(6f, 7f); curveTo(8f, 7f, 9f, 8.2f, 10f, 9.5f)
-        moveTo(14f, 14.5f); curveTo(15f, 15.8f, 16f, 17f, 18f, 17f); lineTo(21f, 17f)
-        moveTo(18.5f, 14.5f); lineTo(21f, 17f); lineTo(18.5f, 19.5f)
+        moveTo(3f, 17.5f); horizontalLineTo(5.5f); curveTo(8.5f, 17.5f, 10f, 16f, 11.5f, 13.8f)
+        lineTo(12.8f, 11.8f); curveTo(14.3f, 9.6f, 15.8f, 8.5f, 18.5f, 8.5f); horizontalLineTo(21f)
+        moveTo(18.6f, 5.8f); lineTo(21.3f, 8.5f); lineTo(18.6f, 11.2f)
+        moveTo(3f, 6.5f); horizontalLineTo(5.5f); curveTo(7.6f, 6.5f, 9f, 7.3f, 10f, 8.8f)
+        moveTo(14f, 15.2f); curveTo(15.2f, 16.8f, 16.5f, 17.5f, 18.5f, 17.5f); horizontalLineTo(21f)
+        moveTo(18.6f, 14.8f); lineTo(21.3f, 17.5f); lineTo(18.6f, 20.2f)
     } }
     val Repeat by lazy { vec("repeat") {
-        moveTo(4f, 12f); verticalLineTo(10f); arcTo(3f, 3f, 0f, false, true, 7f, 7f); horizontalLineTo(20f)
-        moveTo(17f, 4f); lineTo(20f, 7f); lineTo(17f, 10f)
-        moveTo(20f, 12f); verticalLineTo(14f); arcTo(3f, 3f, 0f, false, true, 17f, 17f); horizontalLineTo(4f)
-        moveTo(7f, 14f); lineTo(4f, 17f); lineTo(7f, 20f)
+        moveTo(4f, 12f); verticalLineTo(11f); arcTo(3.5f, 3.5f, 0f, false, true, 7.5f, 7.5f); horizontalLineTo(20f)
+        moveTo(17.2f, 4.7f); lineTo(20f, 7.5f); lineTo(17.2f, 10.3f)
+        moveTo(20f, 12f); verticalLineTo(13f); arcTo(3.5f, 3.5f, 0f, false, true, 16.5f, 16.5f); horizontalLineTo(4f)
+        moveTo(6.8f, 13.7f); lineTo(4f, 16.5f); lineTo(6.8f, 19.3f)
     } }
-    val RepeatOne by lazy { vec("repeat_one") {
-        moveTo(4f, 12f); verticalLineTo(10f); arcTo(3f, 3f, 0f, false, true, 7f, 7f); horizontalLineTo(20f)
-        moveTo(17f, 4f); lineTo(20f, 7f); lineTo(17f, 10f)
-        moveTo(20f, 12f); verticalLineTo(14f); arcTo(3f, 3f, 0f, false, true, 17f, 17f); horizontalLineTo(4f)
-        moveTo(7f, 14f); lineTo(4f, 17f); lineTo(7f, 20f)
-        moveTo(10.5f, 10.5f); lineTo(12.5f, 9.5f); lineTo(12.5f, 14.5f)
+    val RepeatOne by lazy { vecM("repeat_one", false,
+        outl { 
+            moveTo(4f, 12f); verticalLineTo(11f); arcTo(3.5f, 3.5f, 0f, false, true, 7.5f, 7.5f); horizontalLineTo(20f)
+            moveTo(17.2f, 4.7f); lineTo(20f, 7.5f); lineTo(17.2f, 10.3f)
+            moveTo(20f, 12f); verticalLineTo(13f); arcTo(3.5f, 3.5f, 0f, false, true, 16.5f, 16.5f); horizontalLineTo(4f)
+            moveTo(6.8f, 13.7f); lineTo(4f, 16.5f); lineTo(6.8f, 19.3f)
+        },
+        outl(1.8f) { moveTo(10.8f, 10.8f); lineTo(12.4f, 9.8f); verticalLineTo(14.2f) }
+    ) }
+
+    // ── الوسائط ──
+    val Music by lazy { vecM("music", false,
+        outl { moveTo(9.5f, 17f); verticalLineTo(6.8f); lineTo(19f, 4.8f); verticalLineTo(15f) },
+        solid(1.4f) { circle(7f, 17.3f, 2.4f); circle(16.5f, 15.3f, 2.4f) }
+    ) }
+    val Video by lazy { vecM("video", false,
+        outl { rr(3f, 5.5f, 18f, 13f, 3.8f) },
+        solid(1.6f) { moveTo(10.6f, 9.8f); lineTo(14.6f, 12f); lineTo(10.6f, 14.2f); close() }
+    ) }
+    val Queue by lazy { vecM("queue", false,
+        outl { moveTo(4f, 6.5f); horizontalLineTo(15.5f); moveTo(4f, 11.5f); horizontalLineTo(15.5f); moveTo(4f, 16.5f); horizontalLineTo(9.5f) },
+        solid(1.6f) { moveTo(14.8f, 14f); lineTo(20f, 17.2f); lineTo(14.8f, 20.4f); close() }
+    ) }
+    val Subs by lazy { vecM("subs", false,
+        outl { rr(3f, 5.5f, 18f, 13f, 3.8f) },
+        outl { moveTo(7f, 10.8f); horizontalLineTo(10f); moveTo(13f, 10.8f); horizontalLineTo(17f)
+             moveTo(7f, 14.2f); horizontalLineTo(12f); moveTo(15f, 14.2f); horizontalLineTo(17f) }
+    ) }
+    val Headphones by lazy { vecM("headphones", false,
+        outl { moveTo(4.5f, 14.5f); verticalLineTo(12f); arcTo(7.5f, 7.5f, 0f, false, true, 19.5f, 12f); verticalLineTo(14.5f) },
+        solid(1.6f) { rr(3.8f, 13.6f, 3.4f, 6f, 1.7f); rr(16.8f, 13.6f, 3.4f, 6f, 1.7f) }
+    ) }
+    val Pip by lazy { vecM("pip", false,
+        outl { rr(3f, 5.5f, 18f, 13f, 3.8f) },
+        solid(1.4f) { rr(12.4f, 11.6f, 5.6f, 3.6f, 1.2f) }
+    ) }
+    val Folder by lazy { vec("folder") {
+        moveTo(3f, 8.5f); verticalLineTo(6.5f); arcTo(2f, 2f, 0f, false, true, 5f, 4.5f); horizontalLineTo(9.2f)
+        lineTo(11.6f, 7.5f); horizontalLineTo(19f); arcTo(2f, 2f, 0f, false, true, 21f, 9.5f); verticalLineTo(17.5f)
+        arcTo(2f, 2f, 0f, false, true, 19f, 19.5f); horizontalLineTo(5f); arcTo(2f, 2f, 0f, false, true, 3f, 17.5f); close()
     } }
-    val Music by lazy { vec("music") {
-        moveTo(9f, 17f); verticalLineTo(5f); lineTo(19f, 3f); verticalLineTo(15f)
-        moveTo(4.5f, 17f); arcTo(2.5f, 2.5f, 0f, true, true, 9.5f, 17f); arcTo(2.5f, 2.5f, 0f, true, true, 4.5f, 17f)
-        moveTo(14.5f, 15f); arcTo(2.5f, 2.5f, 0f, true, true, 19.5f, 15f); arcTo(2.5f, 2.5f, 0f, true, true, 14.5f, 15f)
+    val Album by lazy { vecM("album", false,
+        outl { circle(12f, 12f, 9f) },
+        outl(1.6f) { circle(12f, 12f, 4.2f) },
+        solid(0.6f) { circle(12f, 12f, 1.1f) }
+    ) }
+    val Artist by lazy { vec("artist") {
+        circle(12f, 8f, 4f)
+        moveTo(4.5f, 20f); arcTo(7.5f, 6.5f, 0f, false, true, 19.5f, 20f)
     } }
-    val Video by lazy { vec("video") {
-        moveTo(5f, 5f); horizontalLineTo(19f); arcTo(2f, 2f, 0f, false, true, 21f, 7f); verticalLineTo(17f)
-        arcTo(2f, 2f, 0f, false, true, 19f, 19f); horizontalLineTo(5f); arcTo(2f, 2f, 0f, false, true, 3f, 17f)
-        verticalLineTo(7f); arcTo(2f, 2f, 0f, false, true, 5f, 5f)
-        moveTo(10f, 9f); lineTo(15f, 12f); lineTo(10f, 15f); close()
-    } }
-    val Queue by lazy { vec("queue") {
-        moveTo(4f, 6f); horizontalLineTo(16f)
-        moveTo(4f, 11f); horizontalLineTo(16f)
-        moveTo(4f, 16f); horizontalLineTo(10f)
-        moveTo(14f, 14f); lineTo(20f, 17.5f); lineTo(14f, 21f); close()
-    } }
-    val Speed by lazy { vec("speed") {
-        moveTo(4f, 17f); arcTo(8f, 8f, 0f, false, true, 20f, 17f)
-        moveTo(12f, 17f); lineTo(16f, 11f)
-    } }
+
+    // ── أدوات المشغّل ──
+    val Speed by lazy { vecM("speed", false,
+        outl { moveTo(4f, 17.5f); arcTo(8f, 8f, 0f, false, true, 20f, 17.5f)
+             moveTo(12f, 17.5f); lineTo(15.8f, 11.5f) },
+        solid(0.8f) { circle(12f, 17.5f, 1.3f) }
+    ) }
     val Timer by lazy { vec("timer") {
         circle(12f, 13.5f, 7.5f)
-        moveTo(12f, 9.5f); verticalLineTo(13.5f); lineTo(15f, 15.5f)
-        moveTo(10f, 2.5f); horizontalLineTo(14f)
+        moveTo(12f, 9.8f); verticalLineTo(13.5f); lineTo(14.6f, 15.2f)
+        moveTo(10f, 2.8f); horizontalLineTo(14f)
     } }
     val Eq by lazy { vec("eq") {
-        moveTo(6f, 4f); verticalLineTo(20f)
-        moveTo(12f, 4f); verticalLineTo(20f)
-        moveTo(18f, 4f); verticalLineTo(20f)
-        moveTo(3.5f, 9f); horizontalLineTo(8.5f)
-        moveTo(9.5f, 15f); horizontalLineTo(14.5f)
-        moveTo(15.5f, 8f); horizontalLineTo(20.5f)
+        moveTo(6f, 4f); verticalLineTo(6.5f); moveTo(6f, 11.5f); verticalLineTo(20f); circle(6f, 9f, 2.5f)
+        moveTo(12f, 4f); verticalLineTo(12.5f); moveTo(12f, 17.5f); verticalLineTo(20f); circle(12f, 15f, 2.5f)
+        moveTo(18f, 4f); verticalLineTo(5.5f); moveTo(18f, 10.5f); verticalLineTo(20f); circle(18f, 8f, 2.5f)
     } }
-    val Volume by lazy { vec("volume") {
-        moveTo(4f, 10f); horizontalLineTo(8f); lineTo(13f, 6f); verticalLineTo(18f); lineTo(8f, 14f); horizontalLineTo(4f); close()
-        moveTo(16f, 9f); quadTo(18.5f, 12f, 16f, 15f)
-        moveTo(18.5f, 6.5f); quadTo(23f, 12f, 18.5f, 17.5f)
-    } }
+    val Volume by lazy { vecM("volume", false,
+        solid(2f) { moveTo(4.5f, 10.2f); horizontalLineTo(7.6f); lineTo(12f, 6.6f); verticalLineTo(17.4f); lineTo(7.6f, 13.8f); horizontalLineTo(4.5f); close() },
+        outl { moveTo(15.6f, 9.2f); quadTo(17.6f, 12f, 15.6f, 14.8f)
+             moveTo(18.4f, 6.4f); quadTo(22.2f, 12f, 18.4f, 17.6f) }
+    ) }
     val Bright by lazy { vec("bright") {
         circle(12f, 12f, 4f)
-        moveTo(12f, 3f); lineTo(12f, 5f)
-        moveTo(12f, 19f); lineTo(12f, 21f)
-        moveTo(3f, 12f); lineTo(5f, 12f)
-        moveTo(19f, 12f); lineTo(21f, 12f)
-        moveTo(5.6f, 5.6f); lineTo(7f, 7f)
-        moveTo(17f, 17f); lineTo(18.4f, 18.4f)
-        moveTo(18.4f, 5.6f); lineTo(17f, 7f)
-        moveTo(7f, 17f); lineTo(5.6f, 18.4f)
+        moveTo(12f, 3f); verticalLineTo(5f); moveTo(12f, 19f); verticalLineTo(21f)
+        moveTo(3f, 12f); horizontalLineTo(5f); moveTo(19f, 12f); horizontalLineTo(21f)
+        moveTo(5.6f, 5.6f); lineTo(7f, 7f); moveTo(17f, 17f); lineTo(18.4f, 18.4f)
+        moveTo(18.4f, 5.6f); lineTo(17f, 7f); moveTo(7f, 17f); lineTo(5.6f, 18.4f)
     } }
-    val Lock by lazy { vec("lock") {
-        moveTo(6f, 11f); horizontalLineTo(18f); verticalLineTo(20f); horizontalLineTo(6f); close()
-        moveTo(8f, 11f); verticalLineTo(8f); arcTo(4f, 4f, 0f, false, true, 16f, 8f); verticalLineTo(11f)
-    } }
-    val Unlock by lazy { vec("unlock") {
-        moveTo(6f, 11f); horizontalLineTo(18f); verticalLineTo(20f); horizontalLineTo(6f); close()
-        moveTo(8f, 11f); verticalLineTo(8f); arcTo(4f, 4f, 0f, false, true, 15.5f, 6.5f)
-    } }
+    val Lock by lazy { vecM("lock", false,
+        outl { rr(5f, 10.5f, 14f, 10f, 3f); moveTo(8f, 10.5f); verticalLineTo(8f); arcTo(4f, 4f, 0f, false, true, 16f, 8f); verticalLineTo(10.5f) },
+        solid(0.6f) { circle(12f, 15.5f, 1.2f) }
+    ) }
+    val Unlock by lazy { vecM("unlock", false,
+        outl { rr(5f, 10.5f, 14f, 10f, 3f); moveTo(8f, 10.5f); verticalLineTo(8f); arcTo(4f, 4f, 0f, false, true, 15.8f, 7f) },
+        solid(0.6f) { circle(12f, 15.5f, 1.2f) }
+    ) }
     val Aspect by lazy { vec("aspect") {
-        moveTo(4f, 8f); verticalLineTo(4f); horizontalLineTo(8f)
-        moveTo(16f, 4f); horizontalLineTo(20f); verticalLineTo(8f)
-        moveTo(20f, 16f); verticalLineTo(20f); horizontalLineTo(16f)
-        moveTo(8f, 20f); horizontalLineTo(4f); verticalLineTo(16f)
+        moveTo(4f, 9f); verticalLineTo(7f); arcTo(3f, 3f, 0f, false, true, 7f, 4f); horizontalLineTo(9f)
+        moveTo(15f, 4f); horizontalLineTo(17f); arcTo(3f, 3f, 0f, false, true, 20f, 7f); verticalLineTo(9f)
+        moveTo(20f, 15f); verticalLineTo(17f); arcTo(3f, 3f, 0f, false, true, 17f, 20f); horizontalLineTo(15f)
+        moveTo(9f, 20f); horizontalLineTo(7f); arcTo(3f, 3f, 0f, false, true, 4f, 17f); verticalLineTo(15f)
     } }
     val Rotate by lazy { vec("rotate") {
         moveTo(19f, 12f); arcTo(7f, 7f, 0f, true, true, 12f, 5f)
-        moveTo(10f, 2.5f); lineTo(13.5f, 5f); lineTo(10f, 7.5f)
+        moveTo(14.2f, 2.6f); lineTo(11.8f, 5f); lineTo(14.2f, 7.4f)
     } }
-    val Subs by lazy { vec("subs") {
-        moveTo(5f, 5f); horizontalLineTo(19f); arcTo(2f, 2f, 0f, false, true, 21f, 7f); verticalLineTo(17f)
-        arcTo(2f, 2f, 0f, false, true, 19f, 19f); horizontalLineTo(5f); arcTo(2f, 2f, 0f, false, true, 3f, 17f)
-        verticalLineTo(7f); arcTo(2f, 2f, 0f, false, true, 5f, 5f)
-        moveTo(7f, 11f); horizontalLineTo(10.5f); moveTo(13f, 11f); horizontalLineTo(17f)
-        moveTo(7f, 15f); horizontalLineTo(13f); moveTo(15.5f, 15f); horizontalLineTo(17f)
-    } }
-    val Headphones by lazy { vec("headphones") {
-        moveTo(4f, 15f); verticalLineTo(12f); arcTo(8f, 8f, 0f, false, true, 20f, 12f); verticalLineTo(15f)
-        moveTo(4f, 14f); horizontalLineTo(7f); verticalLineTo(19f); horizontalLineTo(4f); close()
-        moveTo(20f, 14f); horizontalLineTo(17f); verticalLineTo(19f); horizontalLineTo(20f); close()
-    } }
-    val Pip by lazy { vec("pip") {
-        moveTo(3f, 5f); horizontalLineTo(21f); verticalLineTo(19f); horizontalLineTo(3f); close()
-        moveTo(12f, 12f); horizontalLineTo(18f); verticalLineTo(16f); horizontalLineTo(12f); close()
-    } }
-    val Folder by lazy { vec("folder") {
-        moveTo(3f, 6f); verticalLineTo(18f); horizontalLineTo(21f); verticalLineTo(9f); horizontalLineTo(11f); lineTo(9f, 6f); close()
-    } }
-    val Forward by lazy { vec("forward") {
-        moveTo(6f, 6f); lineTo(12f, 12f); lineTo(6f, 18f)
-        moveTo(13f, 6f); lineTo(19f, 12f); lineTo(13f, 18f)
-    } }
-    val Backward by lazy { vec("backward") {
-        moveTo(18f, 6f); lineTo(12f, 12f); lineTo(18f, 18f)
-        moveTo(11f, 6f); lineTo(5f, 12f); lineTo(11f, 18f)
-    } }
-    val Album by lazy { vec("album") {
-        circle(12f, 12f, 9f)
-        circle(12f, 12f, 2.5f)
-    } }
-    val Artist by lazy { vec("artist") {
-        circle(12f, 8f, 4f)
-        moveTo(4f, 20f); arcTo(8f, 6f, 0f, false, true, 20f, 20f)
-    } }
+
+    // ── تفاعل وتنقّل ──
     val Heart by lazy { vec("heart") {
-        moveTo(12f, 20.5f); curveTo(5f, 15f, 3f, 11f, 3f, 8.5f); curveTo(3f, 5.5f, 5.2f, 4f, 7.5f, 4f)
-        curveTo(9.5f, 4f, 11f, 5f, 12f, 6.8f); curveTo(13f, 5f, 14.5f, 4f, 16.5f, 4f)
-        curveTo(18.8f, 4f, 21f, 5.5f, 21f, 8.5f); curveTo(21f, 11f, 19f, 15f, 12f, 20.5f); close()
+        moveTo(12f, 20.2f); curveTo(5f, 15f, 3f, 11.2f, 3f, 8.6f); curveTo(3f, 5.7f, 5.2f, 4f, 7.6f, 4f)
+        curveTo(9.5f, 4f, 11f, 5f, 12f, 6.8f); curveTo(13f, 5f, 14.5f, 4f, 16.4f, 4f)
+        curveTo(18.8f, 4f, 21f, 5.7f, 21f, 8.6f); curveTo(21f, 11.2f, 19f, 15f, 12f, 20.2f); close()
     } }
     val HeartFill by lazy { vec("heart_fill", fill = true) {
-        moveTo(12f, 20.5f); curveTo(5f, 15f, 3f, 11f, 3f, 8.5f); curveTo(3f, 5.5f, 5.2f, 4f, 7.5f, 4f)
-        curveTo(9.5f, 4f, 11f, 5f, 12f, 6.8f); curveTo(13f, 5f, 14.5f, 4f, 16.5f, 4f)
-        curveTo(18.8f, 4f, 21f, 5.5f, 21f, 8.5f); curveTo(21f, 11f, 19f, 15f, 12f, 20.5f); close()
+        moveTo(12f, 20.2f); curveTo(5f, 15f, 3f, 11.2f, 3f, 8.6f); curveTo(3f, 5.7f, 5.2f, 4f, 7.6f, 4f)
+        curveTo(9.5f, 4f, 11f, 5f, 12f, 6.8f); curveTo(13f, 5f, 14.5f, 4f, 16.4f, 4f)
+        curveTo(18.8f, 4f, 21f, 5.7f, 21f, 8.6f); curveTo(21f, 11.2f, 19f, 15f, 12f, 20.2f); close()
     } }
-    val More by lazy { vec("more", w = 3.2f) {
+    val More by lazy { vec("more", w = 3.4f) {
         moveTo(12f, 5f); lineTo(12.01f, 5f)
         moveTo(12f, 12f); lineTo(12.01f, 12f)
         moveTo(12f, 19f); lineTo(12.01f, 19f)
     } }
     val Sort by lazy { vec("sort") {
-        moveTo(4f, 6f); horizontalLineTo(20f)
+        moveTo(4f, 6.5f); horizontalLineTo(20f)
         moveTo(4f, 12f); horizontalLineTo(15f)
-        moveTo(4f, 18f); horizontalLineTo(10f)
+        moveTo(4f, 17.5f); horizontalLineTo(10f)
     } }
-    val Plus by lazy { vec("plus") {
+    val Plus by lazy { vec("plus", w = 2.2f) {
         moveTo(12f, 5f); verticalLineTo(19f)
         moveTo(5f, 12f); horizontalLineTo(19f)
     } }
-    val Back by lazy { vec("back", mirror = true) {
-        moveTo(15f, 5f); lineTo(8f, 12f); lineTo(15f, 19f)
+    val Back by lazy { vec("back", w = 2.2f, mirror = true) {
+        moveTo(14.5f, 5.5f); lineTo(8f, 12f); lineTo(14.5f, 18.5f)
     } }
-    val Down by lazy { vec("down") {
-        moveTo(6f, 9f); lineTo(12f, 15f); lineTo(18f, 9f)
+    val Down by lazy { vec("down", w = 2.2f) {
+        moveTo(6f, 9.5f); lineTo(12f, 15.5f); lineTo(18f, 9.5f)
     } }
     val Link by lazy { vec("link") {
         moveTo(10f, 7f); horizontalLineTo(7f); arcTo(5f, 5f, 0f, false, false, 7f, 17f); horizontalLineTo(10f)
         moveTo(14f, 7f); horizontalLineTo(17f); arcTo(5f, 5f, 0f, false, true, 17f, 17f); horizontalLineTo(14f)
-        moveTo(8f, 12f); horizontalLineTo(16f)
+        moveTo(8.5f, 12f); horizontalLineTo(15.5f)
     } }
     val Refresh by lazy { vec("refresh") {
         moveTo(19f, 12f); arcTo(7f, 7f, 0f, true, true, 16.5f, 6.6f)
         moveTo(19f, 4f); verticalLineTo(8f); horizontalLineTo(15f)
+    } }
+
+    // ── أيقونات كانت من مكتبة Material وبقت من نفس الطقم ──
+    val Search by lazy { vec("search", w = 2.2f) {
+        circle(10.5f, 10.5f, 6.3f)
+        moveTo(15.2f, 15.2f); lineTo(20f, 20f)
+    } }
+    val Close by lazy { vec("close", w = 2.2f) {
+        moveTo(6f, 6f); lineTo(18f, 18f)
+        moveTo(18f, 6f); lineTo(6f, 18f)
+    } }
+    val Check by lazy { vec("check", w = 2.4f) {
+        moveTo(5f, 12.5f); lineTo(9.8f, 17.2f); lineTo(19f, 7.2f)
+    } }
+    val Menu by lazy { vec("menu", w = 2.2f) {
+        moveTo(4f, 7f); horizontalLineTo(20f)
+        moveTo(4f, 12f); horizontalLineTo(20f)
+        moveTo(4f, 17f); horizontalLineTo(20f)
+    } }
+    val Share by lazy { vec("share") {
+        circle(6.5f, 12f, 2.5f); circle(17.5f, 6f, 2.5f); circle(17.5f, 18f, 2.5f)
+        moveTo(8.8f, 10.8f); lineTo(15.2f, 7.2f)
+        moveTo(8.8f, 13.2f); lineTo(15.2f, 16.8f)
+    } }
+    val Delete by lazy { vec("delete") {
+        moveTo(4f, 7f); horizontalLineTo(20f)
+        moveTo(9f, 7f); verticalLineTo(5f); horizontalLineTo(15f); verticalLineTo(7f)
+        moveTo(6f, 7f); lineTo(6.8f, 18f); arcTo(2f, 2f, 0f, false, false, 8.8f, 20f); horizontalLineTo(15.2f)
+        arcTo(2f, 2f, 0f, false, false, 17.2f, 18f); lineTo(18f, 7f)
+        moveTo(10f, 11f); verticalLineTo(16f); moveTo(14f, 11f); verticalLineTo(16f)
+    } }
+    val Settings by lazy { vec("settings") {
+        moveTo(4f, 8f); horizontalLineTo(11.5f); circle(14f, 8f, 2.5f); moveTo(16.5f, 8f); horizontalLineTo(20f)
+        moveTo(4f, 16f); horizontalLineTo(7f); circle(9.5f, 16f, 2.5f); moveTo(12f, 16f); horizontalLineTo(20f)
     } }
 }
 
@@ -419,14 +471,18 @@ class CookieShape(private val lobes: Int = 9, private val amp: Float = 0.06f) : 
 }
 
 @Composable
-fun CookieIcon(icon: ImageVector, size: Dp, container: Color, tint: Color, modifier: Modifier = Modifier, spin: Boolean = true) {
+fun CookieIcon(
+    icon: ImageVector, size: Dp, container: Color, tint: Color, modifier: Modifier = Modifier, spin: Boolean = true,
+    desc: String? = null, onClick: (() -> Unit)? = null
+) {
     val shape = remember { CookieShape() }
     val rot by rememberInfiniteTransition(label = "cookie").animateFloat(
         0f, 360f, infiniteRepeatable(tween(26000, easing = LinearEasing)), label = "rot"
     )
-    Box(modifier.size(size), contentAlignment = Alignment.Center) {
+    val click = if (onClick != null) Modifier.clip(CircleShape).clickable(onClick = onClick) else Modifier
+    Box(modifier.size(size).then(click), contentAlignment = Alignment.Center) {
         Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = if (spin) rot else 0f }.clip(shape).background(container))
-        Icon(icon, null, Modifier.size(size * 0.44f), tint = tint)
+        Icon(icon, desc, Modifier.size(size * 0.44f), tint = tint)
     }
 }
 
@@ -563,7 +619,7 @@ fun SettingRow(
 
 @Composable
 fun Toggle(checked: Boolean, onChange: (Boolean) -> Unit) =
-    Switch(checked, onChange, thumbContent = if (checked) ({ Icon(Icons.Rounded.Check, null, Modifier.size(SwitchDefaults.IconSize)) }) else null)
+    Switch(checked, onChange, thumbContent = if (checked) ({ Icon(Ic.Check, null, Modifier.size(SwitchDefaults.IconSize)) }) else null)
 
 // مبدّل بحبّة بتنزلق بين الخيارات
 @Composable
@@ -692,7 +748,8 @@ private fun Shell() {
     var np by remember { mutableStateOf(false) }
     val snack = remember { SnackbarHostState() }
     val imeOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    val mini = Music.has
+    // الشريط المصغّر بيظهر بس جوه قسم الموسيقى (tab 1)، ومش بيظهر في الفيديو أو الإعدادات حتى لو فيه أغنية شغالة
+    val mini = Music.has && tab == 1
     val bottom = if (imeOpen) 16.dp
     else WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 120.dp + (if (mini) 80.dp else 0.dp)
 
@@ -737,7 +794,7 @@ private fun FloatingNav(sel: Int, on: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val hap = LocalHapticFeedback.current
     val items = remember {
-        listOf(NavTab("الفيديو", Ic.Video), NavTab("الموسيقى", Ic.Music), NavTab("الإعدادات", Icons.Outlined.Settings))
+        listOf(NavTab("الفيديو", Ic.Video), NavTab("الموسيقى", Ic.Music), NavTab("الإعدادات", Ic.Settings))
     }
     Surface(shape = CircleShape, color = cs.surfaceContainerHigh, shadowElevation = 10.dp) {
         Row(Modifier.padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {

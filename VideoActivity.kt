@@ -583,7 +583,7 @@ private fun OptionRow(label: String, selected: Boolean, onClick: () -> Unit) {
             label, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyLarge, color = if (selected) cs.onPrimaryContainer else cs.onSurface
         )
-        if (selected) Icon(Icons.Rounded.Check, null, Modifier.size(20.dp), tint = cs.onPrimaryContainer)
+        if (selected) Icon(Ic.Check, null, Modifier.size(20.dp), tint = cs.onPrimaryContainer)
     }
 }
 
@@ -598,7 +598,7 @@ private fun PanelFrame(title: String, onClose: () -> Unit, content: @Composable 
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(title, Modifier.weight(1f).padding(start = 8.dp), style = MaterialTheme.typography.titleLarge)
-            IconButton(onClose) { Icon(Icons.Rounded.Close, "إغلاق") }
+            IconButton(onClose) { Icon(Ic.Close, "إغلاق") }
         }
         content()
     }

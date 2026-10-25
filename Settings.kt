@@ -38,7 +38,7 @@ private fun Dot(color: Color?, selected: Boolean, label: String, onClick: () -> 
                 .then(if (selected) Modifier.border(3.dp, cs.onSurface, CircleShape) else Modifier)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
-        ) { if (selected) Icon(Icons.Rounded.Check, null, Modifier.size(22.dp), tint = Color.White) }
+        ) { if (selected) Icon(Ic.Check, null, Modifier.size(22.dp), tint = Color.White) }
         Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
     }
 }
@@ -61,7 +61,7 @@ fun SettingsScreen(bottom: Dp) {
         item { SectionTitle("المظهر", Modifier.padding(top = 0.dp)) }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                SettingRow(Icons.Rounded.Settings, "السمة")
+                SettingRow(Ic.Settings, "السمة")
                 Switcher(listOf("النظام", "فاتح", "داكن"), Prefs.theme) { Prefs.theme = it; Prefs.save() }
             }
         }
