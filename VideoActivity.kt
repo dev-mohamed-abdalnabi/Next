@@ -588,13 +588,6 @@ private fun CtlBtn(icon: ImageVector, on: () -> Unit, active: Boolean = false, s
     val sc by animateFloatAsState(if (pressed) 0.86f else 1f, spring(), label = "cb")
     Box(
         Modifier.size(size.dp).scale(sc).clip(CircleShape)
-            .background(
-                when {
-                    active -> cs.primary.copy(alpha = 0.24f)
-                    glass -> Color.White.copy(alpha = 0.12f)
-                    else -> Color.Transparent
-                }
-            )
             .clickable(interactionSource = src, indication = null, onClick = on),
         contentAlignment = Alignment.Center
     ) {
@@ -610,8 +603,6 @@ private fun SkipBtn(icon: ImageVector, enabled: Boolean, desc: String, on: () ->
     val sc by animateFloatAsState(if (pressed) 0.88f else 1f, spring(), label = "sk")
     Box(
         Modifier.size(56.dp).scale(sc).clip(CircleShape)
-            .background(Color.White.copy(alpha = if (enabled) 0.16f else 0.07f))
-            .border(1.dp, Color.White.copy(alpha = if (enabled) 0.22f else 0.08f), CircleShape)
             .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = on),
         contentAlignment = Alignment.Center
     ) {
@@ -930,7 +921,7 @@ fun VideoUi(a: VideoActivity) {
                                 Text(if (vs.dur > 0) fmtMs(vs.dur) else "--:--", color = Color.White, style = MaterialTheme.typography.labelLarge)
                             }
                             Row(
-                                Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = 0.10f)).padding(horizontal = 6.dp, vertical = 4.dp),
+                                Modifier.fillMaxWidth().padding(top = 6.dp).padding(horizontal = 6.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically
                             ) {
                                 CtlBtn(Ic.Lock, { vs.locked = true; vs.controls = false; vs.lockShown = true; vs.touch++ }, glass = false, desc = "قفل")
@@ -940,7 +931,6 @@ fun VideoUi(a: VideoActivity) {
                                 val spTxt = (if (vs.speed % 1f == 0f) vs.speed.toInt().toString() else String.format(Locale.US, "%.2f", vs.speed).trimEnd('0')) + "x"
                                 Box(
                                     Modifier.height(36.dp).clip(CircleShape)
-                                        .background(if (vs.speed != 1f) cs.primary.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.14f))
                                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { vs.panel = 1 }
                                         .padding(horizontal = 14.dp),
                                     contentAlignment = Alignment.Center

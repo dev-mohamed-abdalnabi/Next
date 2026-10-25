@@ -16,6 +16,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -61,6 +66,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import kotlin.math.abs
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -636,21 +642,25 @@ fun NowPlaying(onClose: () -> Unit) {
     val artScale by animateFloatAsState(if (Music.playing) 1f else 0.9f, spring(0.6f, 300f), label = "art")
 
     // سحب الشاشة: لتحت = إغلاق، شمال = التالية، يمين = السابقة
-    var liveX by remember { mutableFloatStateOf(0f) }
+    var liveX by remember { mutableFloatStateOf(0f) }          // السحب الأفقي الخام (تحت صباع المستخدم)
     var liveY by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
-    val showX by animateFloatAsState(liveX, if (dragging) snap() else spring(), label = "dx")
-    val showY by animateFloatAsState(liveY, if (dragging) snap() else spring(), label = "dy")
+    var switching by remember { mutableStateOf(false) }
+    val slide = remember { Animatable(0f) }                      // حركة الخروج/الدخول عند تغيير الأغنية
+    val showY by animateFloatAsState(liveY, if (dragging) snap() else spring(0.9f, 400f), label = "dy")
+    val scope = rememberCoroutineScope()
+    var screenW by remember { mutableFloatStateOf(1080f) }
     var seekR by remember { mutableStateOf(Rect.Zero) }   // منطقة شريط التقدّم (مش بنسحب منها)
     val closeNow by rememberUpdatedState(onClose)
 
-    Surface(Modifier.fillMaxSize(), color = cs.surface) {
-        Box(
-            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(cs.primaryContainer, cs.surface, cs.surface)))
+    // الصندوق الخارجي ثابت (بيستقبل اللمس)، والـ Surface جواه هو اللي بيتحرّك مع الصباع بكل خلفيته وتدرّجه
+    Box(
+        Modifier.fillMaxSize()
+            .onSizeChanged { screenW = it.width.toFloat() }
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        var mode = if (seekR.contains(down.position)) -1 else 0   // 1 أفقي، 2 لتحت، -1 تجاهل
+                        var mode = if (seekR.contains(down.position) || switching) -1 else 0   // 1 أفقي، 2 لتحت، -1 تجاهل
                         var dx = 0f; var dy = 0f
                         val slop = viewConfiguration.touchSlop * 2f
                         while (true) {
@@ -667,16 +677,45 @@ fun NowPlaying(onClose: () -> Unit) {
                             if (mode == 1) liveX = dx
                             if (mode == 2) liveY = dy.coerceAtLeast(0f)
                         }
-                        val th = 110.dp.toPx()
+                        val th = 90.dp.toPx()
                         val closeIt = mode == 2 && dy > th * 1.4f
-                        if (mode == 1 && abs(dx) > th) { if (dx < 0f) Music.next() else Music.prev() }
-                        dragging = false; liveX = 0f; liveY = 0f
-                        if (closeIt) closeNow()
+                        dragging = false
+                        if (mode == 1) {
+                            val fwd = dx < 0f
+                            val can = Music.queue.size > 1
+                            val dxNow = liveX
+                            if (abs(dx) > th && can) {
+                                scope.launch {
+                                    switching = true
+                                    slide.snapTo(dxNow); liveX = 0f
+                                    val dir = if (fwd) -1f else 1f
+                                    slide.animateTo(dir * screenW, tween(170, easing = FastOutLinearInEasing))
+                                    val before = Music.current
+                                    if (fwd) Music.next() else Music.prev()
+                                    withTimeoutOrNull(450) { snapshotFlow { Music.current }.first { it != before } }
+                                    slide.snapTo(-dir * screenW * 0.55f)
+                                    slide.animateTo(0f, spring(0.82f, Spring.StiffnessMediumLow))
+                                    switching = false
+                                }
+                            } else {
+                                scope.launch { slide.snapTo(dxNow); liveX = 0f; slide.animateTo(0f, spring(0.8f, 500f)) }
+                            }
+                        } else liveX = 0f
+                        if (closeIt) closeNow() else liveY = 0f
                     }
                 }
+    ) {
+        Surface(
+            Modifier.fillMaxSize().graphicsLayer {
+                translationY = showY
+                val r = (showY / 120.dp.toPx()).coerceIn(0f, 1f) * 32.dp.toPx()
+                shape = RoundedCornerShape(topStart = r, topEnd = r); clip = true
+            },
+            color = cs.surface
         ) {
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(cs.primaryContainer, cs.surface, cs.surface)))) {
             Column(
-                Modifier.fillMaxSize().graphicsLayer { translationY = showY * 0.6f; alpha = 1f - (showY / (size.height * 1.2f)).coerceIn(0f, 0.5f) }
+                Modifier.fillMaxSize()
                     .statusBarsPadding().navigationBarsPadding()
                     .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -688,7 +727,7 @@ fun NowPlaying(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 Box(
-                    Modifier.fillMaxWidth().aspectRatio(1f).graphicsLayer { scaleX = artScale; scaleY = artScale; translationX = showX * 0.5f; alpha = 1f - (abs(showX) / (size.width * 1.5f)).coerceIn(0f, 0.4f) }
+                    Modifier.fillMaxWidth().aspectRatio(1f).graphicsLayer { val ox = liveX + slide.value; scaleX = artScale; scaleY = artScale; translationX = ox; alpha = (1f - abs(ox) / (size.width * 0.9f)).coerceIn(0f, 1f) }
                         .clip(RoundedCornerShape(44.dp)).background(cs.secondaryContainer)
                 ) {
                     MediaThumb(s?.uri, Modifier.fillMaxSize(), 900) {
@@ -698,7 +737,10 @@ fun NowPlaying(onClose: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(26.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().graphicsLayer { val ox = liveX + slide.value; translationX = ox; alpha = (1f - abs(ox) / (size.width * 0.9f)).coerceIn(0f, 1f) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Column(Modifier.weight(1f)) {
                         Text(s?.title ?: "", style = MaterialTheme.typography.headlineSmall, maxLines = 1, modifier = Modifier.basicMarquee())
                         Text(s?.artist ?: "", style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -752,6 +794,7 @@ fun NowPlaying(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(16.dp))
             }
+        }
         }
     }
 
