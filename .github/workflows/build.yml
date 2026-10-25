@@ -41,6 +41,7 @@ jobs:
           cp *.kt app/src/main/java/app/flowplay/ 2>/dev/null || true
           cp *.ttf app/src/main/res/font/ 2>/dev/null || true
           cp app-build.gradle.kts app/build.gradle.kts 2>/dev/null || true
+          cp proguard-rules.pro app/proguard-rules.pro 2>/dev/null || touch app/proguard-rules.pro
 
           # تصحيح أي استدعاءات برمجية تلقائياً
           sed -i 's/MiniPlayer { np = true }/MiniPlayer(onOpen = { np = true })/g' app/src/main/java/app/flowplay/UI.kt 2>/dev/null || true
