@@ -26,21 +26,50 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Assemble Project Structure & Generate Icons
+      - name: Assemble Project Structure & Generate All Resources
         run: |
-          # 1. إنشاء بنية مجلدات أندرويد
+          # 1. إنشاء كافة المجلدات المطلوبة للمشروع والموارد
           mkdir -p app/src/main/java/app/flowplay
           mkdir -p app/src/main/res/font
           mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap
           mkdir -p app/src/main/res/mipmap-anydpi-v26
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/values-night
 
           # 2. نقل ملفات الكود والخطوط وإعدادات البناء
           cp *.kt app/src/main/java/app/flowplay/ 2>/dev/null || true
           cp *.ttf app/src/main/res/font/ 2>/dev/null || true
           cp app-build.gradle.kts app/build.gradle.kts 2>/dev/null || true
 
-          # 3. إنشاء خلفية الأيقونة
+          # تصحيح أي استدعاءات برمجية تلقائياً
+          sed -i 's/MiniPlayer { np = true }/MiniPlayer(onOpen = { np = true })/g' app/src/main/java/app/flowplay/UI.kt 2>/dev/null || true
+          sed -i 's/LocalClipboardManager\.current\.getText()/clip.getText()/g' app/src/main/java/app/flowplay/Video.kt 2>/dev/null || true
+
+          # 3. إنشاء الثيمات Theme.Flow و Theme.Flow.Video المطلوبة في المانيفست
+          cat << 'EOF' > app/src/main/res/values/themes.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.Flow" parent="@android:style/Theme.Material.NoActionBar">
+                  <item name="android:statusBarColor">@android:color/transparent</item>
+                  <item name="android:navigationBarColor">@android:color/transparent</item>
+              </style>
+              <style name="Theme.Flow.Video" parent="Theme.Flow">
+                  <item name="android:windowFullscreen">true</item>
+                  <item name="android:windowContentOverlay">@null</item>
+              </style>
+          </resources>
+          EOF
+          cp app/src/main/res/values/themes.xml app/src/main/res/values-night/themes.xml
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Next</string>
+          </resources>
+          EOF
+
+          # 4. إنشاء خلفية الأيقونة (أسود داكن مطابِق)
           cat << 'EOF' > app/src/main/res/drawable/ic_launcher_background.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -54,7 +83,7 @@ jobs:
           </vector>
           EOF
 
-          # 4. إنشاء الرسمة الأمامية للأيقونة
+          # 5. إنشاء الرسمة الأمامية (المثلث المتموج بلونيه الأبيض والأزرق الرمادي)
           cat << 'EOF' > app/src/main/res/drawable/ic_launcher_foreground.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -71,7 +100,7 @@ jobs:
           </vector>
           EOF
 
-          # 5. إنشاء ملفات ربط الأيقونة
+          # 6. إنشاء ملفات ربط الأيقونة التكيفية في كل المسارات المحتملة
           cat << 'EOF' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           <?xml version="1.0" encoding="utf-8"?>
           <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
@@ -81,72 +110,16 @@ jobs:
           EOF
 
           cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap/ic_launcher.xml
+          cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap/ic_launcher_round.xml
+          cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/drawable/ic_launcher.xml
 
-          # 6. ملف AndroidManifest.xml
+          # 7. التأكد من وجود ملف AndroidManifest.xml
           if [ -f "AndroidManifest.xml" ]; then
               cp AndroidManifest.xml app/src/main/AndroidManifest.xml
-          else
-              cat << 'EOF' > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-
-              <application
-                  android:label="Next"
-                  android:icon="@mipmap/ic_launcher"
-                  android:roundIcon="@mipmap/ic_launcher_round"
-                  android:supportsRtl="true"
-                  android:theme="@android:style/Theme.Material.NoActionBar">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true"
-                      android:configChanges="orientation|screenSize|screenLayout|keyboardHidden">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                      <intent-filter>
-                          <action android:name="android.intent.action.VIEW" />
-                          <category android:name="android.intent.category.DEFAULT" />
-                          <data android:mimeType="audio/*" />
-                      </intent-filter>
-                  </activity>
-
-                  <activity
-                      android:name=".VideoActivity"
-                      android:exported="true"
-                      android:supportsPictureInPicture="true"
-                      android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden">
-                      <intent-filter>
-                          <action android:name="android.intent.action.VIEW" />
-                          <category android:name="android.intent.category.DEFAULT" />
-                          <data android:mimeType="video/*" />
-                      </intent-filter>
-                  </activity>
-
-                  <service
-                      android:name=".PlaybackService"
-                      android:exported="true"
-                      android:foregroundServiceType="mediaPlayback">
-                      <intent-filter>
-                          <action android:name="androidx.media3.session.MediaSessionService" />
-                      </intent-filter>
-                  </service>
-
-              </application>
-          </manifest>
-          EOF
           fi
 
-          # 7. مفتاح التوقيع
+          # 8. مفتاح التوقيع
           if [ -f "flow.jks" ]; then
               cp flow.jks app/flow.jks
           else
@@ -154,7 +127,7 @@ jobs:
                 -storepass flowplayer2026 -keypass flowplayer2026 -dname "CN=FlowPlay, OU=App, O=Flow, L=City, S=State, C=US"
           fi
 
-          # 8. إجبار استخدام Gradle 8.11.1 المتوافق مع أندرويد
+          # 9. ضبط إصدار جرادل المتوافق 8.11.1
           gradle wrapper --gradle-version 8.11.1
           chmod +x gradlew
 
