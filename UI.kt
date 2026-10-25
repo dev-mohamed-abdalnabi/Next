@@ -780,9 +780,7 @@ private fun Shell() {
                 snack, Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
                     .padding(start = 16.dp, end = 16.dp, bottom = if (imeOpen) 12.dp else if (mini) 180.dp else 100.dp)
             )
-            AnimatedVisibility(np, enter = slideInVertically { it }, exit = slideOutVertically { it }) {
-                NowPlaying { np = false }
-            }
+            if (np) NowPlaying { np = false }
         }
     }
 }
