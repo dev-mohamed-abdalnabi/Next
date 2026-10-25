@@ -24,6 +24,13 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -146,6 +153,7 @@ class VideoActivity : ComponentActivity() {
     var brightness = 0.5f
     private lateinit var audio: AudioManager
     private var autoApplied = false
+    var external = false          // اتفتح من تطبيق تاني (مش من جوه Next)
     private var enhancer: LoudnessEnhancer? = null
 
     private val subPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
@@ -224,7 +232,7 @@ class VideoActivity : ComponentActivity() {
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 vs.vw = videoSize.width; vs.vh = videoSize.height
-                if (Prefs.autoRotate && !autoApplied && vs.vw > 0) {
+                if (Prefs.openOrient == 0 && !autoApplied && vs.vw > 0) {
                     autoApplied = true
                     setOrient(if (vs.vw >= vs.vh) 1 else 2)
                 }
@@ -270,16 +278,20 @@ class VideoActivity : ComponentActivity() {
     private fun handleIntent(i: Intent?) {
         var list: List<Vid>
         var start: Int
+        external = false
         if (i?.getBooleanExtra("q", false) == true && VQ.items.isNotEmpty()) {
             list = VQ.items; start = VQ.start
         } else {
             val u = i?.data
             if (u == null) { finish(); return }
+            external = true
             list = listOf(Vid(-1, u.toString(), nameOf(u), 0, 0, 0, 0, 0, ""))
             start = 0
         }
         items = list
         autoApplied = false
+        // اتجاه الشاشة عند الفتح: 1 طولي، 2 عرضي، 0 حسب الفيديو (بيتحدد أول ما يتعرف على الأبعاد)
+        when (Prefs.openOrient) { 1 -> setOrient(2); 2 -> setOrient(1); else -> {} }
         val mis = list.map {
             MediaItem.Builder().setMediaId(it.uri).setUri(it.uri)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(it.title).build()).build()
@@ -492,6 +504,12 @@ class VideoActivity : ComponentActivity() {
         audio.setStreamVolume(AudioManager.STREAM_MUSIC, (f * mx).roundToInt().coerceIn(0, mx), 0)
     }
 
+    // فتح التطبيق الكامل من الفيديو المفتوح خارجيًا: الفيديو بيكمّل في نافذة عايمة فوق التطبيق
+    fun openApp() {
+        if (Build.VERSION.SDK_INT >= 26) enterPip() else vs.bgAudio = true
+        try { startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Throwable) {}
+    }
+
     fun enterPip() {
         if (Build.VERSION.SDK_INT < 26) return
         try {
@@ -563,10 +581,66 @@ class VideoActivity : ComponentActivity() {
 // ═══════════════════════════ واجهة المشغّل ═══════════════════════════
 
 @Composable
-private fun CtlBtn(icon: ImageVector, on: () -> Unit, active: Boolean = false, size: Int = 48, desc: String? = null) {
+private fun CtlBtn(icon: ImageVector, on: () -> Unit, active: Boolean = false, size: Int = 44, desc: String? = null, glass: Boolean = true) {
     val cs = MaterialTheme.colorScheme
-    IconButton(on, Modifier.size(size.dp)) {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val sc by animateFloatAsState(if (pressed) 0.86f else 1f, spring(), label = "cb")
+    Box(
+        Modifier.size(size.dp).scale(sc).clip(CircleShape)
+            .background(
+                when {
+                    active -> cs.primary.copy(alpha = 0.24f)
+                    glass -> Color.White.copy(alpha = 0.12f)
+                    else -> Color.Transparent
+                }
+            )
+            .clickable(interactionSource = src, indication = null, onClick = on),
+        contentAlignment = Alignment.Center
+    ) {
         Icon(icon, desc, Modifier.size((size * 0.5f).dp), tint = if (active) cs.primary else Color.White)
+    }
+}
+
+// زر السابق / التالي: دايرة زجاجية بإطار خفيف
+@Composable
+private fun SkipBtn(icon: ImageVector, enabled: Boolean, desc: String, on: () -> Unit) {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val sc by animateFloatAsState(if (pressed) 0.88f else 1f, spring(), label = "sk")
+    Box(
+        Modifier.size(56.dp).scale(sc).clip(CircleShape)
+            .background(Color.White.copy(alpha = if (enabled) 0.16f else 0.07f))
+            .border(1.dp, Color.White.copy(alpha = if (enabled) 0.22f else 0.08f), CircleShape)
+            .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = on),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, desc, Modifier.size(28.dp), tint = Color.White.copy(alpha = if (enabled) 1f else 0.35f))
+    }
+}
+
+// زر التشغيل: كبير، بيتحوّل من دايرة لمربّع مدوّر لما الفيديو يشتغل، وله توهّج بلون التطبيق
+@Composable
+private fun PlayBtn(playing: Boolean, ended: Boolean, loading: Boolean, on: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val sc by animateFloatAsState(if (pressed) 0.92f else 1f, spring(), label = "pl")
+    val r by animateDpAsState(if (playing) 26.dp else 40.dp, spring(), label = "pr")
+    val shape = RoundedCornerShape(r)
+    Box(
+        Modifier.size(80.dp).scale(sc)
+            .shadow(18.dp, shape, ambientColor = cs.primary, spotColor = cs.primary)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(cs.primary, cs.primary.copy(alpha = 0.85f))))
+            .clickable(interactionSource = src, indication = null, onClick = on),
+        contentAlignment = Alignment.Center
+    ) {
+        if (loading) CircularProgressIndicator(Modifier.size(66.dp), color = cs.onPrimary.copy(alpha = 0.5f), strokeWidth = 3.dp)
+        Icon(
+            if (ended) PIc.Replay else if (playing) PIc.Pause else PIc.Play, null,
+            Modifier.size(38.dp), tint = cs.onPrimary
+        )
     }
 }
 
@@ -823,34 +897,23 @@ fun VideoUi(a: VideoActivity) {
                             Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            CtlBtn(Ic.Back, { a.finish() }, desc = "رجوع")
+                            CtlBtn(Ic.Back, { a.finish() }, size = 40, desc = "رجوع")
                             Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
                                 Text(vs.title, color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (vs.count > 1) Text("${vs.index + 1} / ${vs.count}", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium)
                             }
-                            if (vs.count > 1) CtlBtn(Ic.Queue, { vs.panel = 3 }, desc = "القائمة")
-                            CtlBtn(Ic.Headphones, { a.toggleBgAudio() }, active = vs.bgAudio, desc = "تشغيل صوت فقط")
-                            if (Build.VERSION.SDK_INT >= 26) CtlBtn(Ic.Pip, { a.enterPip() }, desc = "نافذة عايمة")
-                            CtlBtn(Ic.Subs, { vs.panel = 2 }, active = !vs.textOff, desc = "الصوت والترجمة")
-                            CtlBtn(Ic.More, { vs.panel = 4 }, active = vs.abB > 0 || vs.sleepEnd > 0 || vs.gain > 0 || vs.muted, desc = "المزيد")
+                            if (vs.count > 1) CtlBtn(Ic.Queue, { vs.panel = 3 }, size = 40, desc = "القائمة")
+                            CtlBtn(Ic.Headphones, { a.toggleBgAudio() }, active = vs.bgAudio, size = 40, desc = "تشغيل صوت فقط")
+                            if (Build.VERSION.SDK_INT >= 26) CtlBtn(Ic.Pip, { a.enterPip() }, size = 40, desc = "نافذة عايمة")
+                            CtlBtn(Ic.Subs, { vs.panel = 2 }, active = !vs.textOff, size = 40, desc = "الصوت والترجمة")
+                            CtlBtn(Ic.More, { vs.panel = 4 }, active = vs.abB > 0 || vs.sleepEnd > 0 || vs.gain > 0 || vs.muted, size = 40, desc = "المزيد")
                         }
 
                         // أزرار الوسط
-                        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                            IconButton({ player.seekToPrevious() }, Modifier.size(60.dp), enabled = vs.count > 1 || vs.pos > 3000) {
-                                Icon(Ic.Prev, "السابق", Modifier.size(32.dp), tint = Color.White)
-                            }
-                            Box(
-                                Modifier.size(84.dp).clip(RoundedCornerShape(if (vs.playing) 30.dp else 42.dp)).background(cs.primary)
-                                    .clickable { a.togglePlay() },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (vs.buffering && vs.error == null) CircularProgressIndicator(Modifier.size(70.dp), color = cs.onPrimary.copy(alpha = 0.5f), strokeWidth = 3.dp)
-                                Icon(if (vs.ended) Ic.Refresh else if (vs.playing) Ic.Pause else Ic.Play, null, Modifier.size(38.dp), tint = cs.onPrimary)
-                            }
-                            IconButton({ player.seekToNextMediaItem() }, Modifier.size(60.dp), enabled = player.hasNextMediaItem()) {
-                                Icon(Ic.Next, "التالي", Modifier.size(32.dp), tint = if (player.hasNextMediaItem()) Color.White else Color.White.copy(alpha = 0.3f))
-                            }
+                        Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+                            SkipBtn(PIc.Prev, vs.count > 1 || vs.pos > 3000, "السابق") { player.seekToPrevious() }
+                            PlayBtn(vs.playing, vs.ended, vs.buffering && vs.error == null) { a.togglePlay() }
+                            SkipBtn(PIc.Next, player.hasNextMediaItem(), "التالي") { player.seekToNextMediaItem() }
                         }
 
                         // الشريط السفلي
@@ -866,16 +929,23 @@ fun VideoUi(a: VideoActivity) {
                                 )
                                 Text(if (vs.dur > 0) fmtMs(vs.dur) else "--:--", color = Color.White, style = MaterialTheme.typography.labelLarge)
                             }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                                CtlBtn(Ic.Lock, { vs.locked = true; vs.controls = false; vs.lockShown = true; vs.touch++ }, desc = "قفل")
-                                CtlBtn(Ic.Aspect, { a.cycleAspect() }, desc = "حجم الصورة")
-                                CtlBtn(Ic.Rotate, { a.cycleOrient() }, active = vs.orient != 0, desc = "تدوير")
-                                CtlBtn(if (vs.repeat == Player.REPEAT_MODE_ONE) Ic.RepeatOne else Ic.Repeat, { a.cycleRepeat() }, active = vs.repeat != Player.REPEAT_MODE_OFF, desc = "تكرار")
-                                TextButton({ vs.panel = 1 }) {
-                                    Text(
-                                        (if (vs.speed % 1f == 0f) vs.speed.toInt().toString() else String.format(Locale.US, "%.2f", vs.speed).trimEnd('0')) + "x",
-                                        color = if (vs.speed != 1f) cs.primary else Color.White, style = MaterialTheme.typography.titleSmall
-                                    )
+                            Row(
+                                Modifier.fillMaxWidth().padding(top = 6.dp).clip(RoundedCornerShape(28.dp)).background(Color.White.copy(alpha = 0.10f)).padding(horizontal = 6.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CtlBtn(Ic.Lock, { vs.locked = true; vs.controls = false; vs.lockShown = true; vs.touch++ }, glass = false, desc = "قفل")
+                                CtlBtn(Ic.Aspect, { a.cycleAspect() }, glass = false, desc = "حجم الصورة")
+                                CtlBtn(Ic.Rotate, { a.cycleOrient() }, active = vs.orient != 0, glass = false, desc = "تدوير")
+                                CtlBtn(if (vs.repeat == Player.REPEAT_MODE_ONE) Ic.RepeatOne else Ic.Repeat, { a.cycleRepeat() }, active = vs.repeat != Player.REPEAT_MODE_OFF, glass = false, desc = "تكرار")
+                                val spTxt = (if (vs.speed % 1f == 0f) vs.speed.toInt().toString() else String.format(Locale.US, "%.2f", vs.speed).trimEnd('0')) + "x"
+                                Box(
+                                    Modifier.height(36.dp).clip(CircleShape)
+                                        .background(if (vs.speed != 1f) cs.primary.copy(alpha = 0.24f) else Color.White.copy(alpha = 0.14f))
+                                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { vs.panel = 1 }
+                                        .padding(horizontal = 14.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(spTxt, color = if (vs.speed != 1f) cs.primary else Color.White, style = MaterialTheme.typography.titleSmall)
                                 }
                             }
                         }
@@ -949,6 +1019,7 @@ fun VideoUi(a: VideoActivity) {
                                 OptionRow("تخطي ${Prefs.skipIntro} ثانية", false) { vs.panel = 0; a.skipIntro() }
                                 if (Build.VERSION.SDK_INT >= 26) OptionRow("نافذة عايمة", false) { vs.panel = 0; a.enterPip() }
                                 OptionRow(if (vs.bgAudio) "إيقاف التشغيل كصوت فقط" else "تشغيل كصوت فقط (يكمل في الخلفية)", vs.bgAudio) { a.toggleBgAudio() }
+                                if (a.external) OptionRow("فتح التطبيق (الفيديو يكمّل في نافذة)", false) { vs.panel = 0; a.openApp() }
                                 OptionRow("معلومات الفيديو", false) { vs.panel = 5 }
 
                                 Text("تضخيم الصوت", style = MaterialTheme.typography.titleSmall, color = cs.primary, modifier = Modifier.padding(start = 8.dp, top = 14.dp))

@@ -23,7 +23,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- فتح ملفات الصوت من أي تطبيق -->
+        </activity>
+
+        <!-- فتح ملفات الصوت من أي تطبيق: نافذة صغيرة فوق التطبيق اللي فتحها من غير ما التطبيق كله يفتح -->
+        <activity android:name=".QuickPlayActivity" android:exported="true"
+            android:theme="@style/Theme.Flow.Quick"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode|density">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -37,7 +45,8 @@
         <!-- مشغّل الفيديو: بيفتح من التطبيق أو من أي مدير ملفات/معرض -->
         <activity android:name=".VideoActivity" android:exported="true"
             android:theme="@style/Theme.Flow.Video"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|navigation|uiMode|density">

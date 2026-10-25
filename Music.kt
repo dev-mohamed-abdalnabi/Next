@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package app.flowplay
 
@@ -51,6 +51,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.animation.core.snap
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import kotlin.math.abs
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -624,10 +635,49 @@ fun NowPlaying(onClose: () -> Unit) {
     val frac = if (dur > 0) pos.toFloat() / dur else 0f
     val artScale by animateFloatAsState(if (Music.playing) 1f else 0.9f, spring(0.6f, 300f), label = "art")
 
+    // سحب الشاشة: لتحت = إغلاق، شمال = التالية، يمين = السابقة
+    var liveX by remember { mutableFloatStateOf(0f) }
+    var liveY by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    val showX by animateFloatAsState(liveX, if (dragging) snap() else spring(), label = "dx")
+    val showY by animateFloatAsState(liveY, if (dragging) snap() else spring(), label = "dy")
+    var seekR by remember { mutableStateOf(Rect.Zero) }   // منطقة شريط التقدّم (مش بنسحب منها)
+    val closeNow by rememberUpdatedState(onClose)
+
     Surface(Modifier.fillMaxSize(), color = cs.surface) {
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(cs.primaryContainer, cs.surface, cs.surface)))) {
+        Box(
+            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(cs.primaryContainer, cs.surface, cs.surface)))
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        var mode = if (seekR.contains(down.position)) -1 else 0   // 1 أفقي، 2 لتحت، -1 تجاهل
+                        var dx = 0f; var dy = 0f
+                        val slop = viewConfiguration.touchSlop * 2f
+                        while (true) {
+                            val ev = awaitPointerEvent(PointerEventPass.Final)
+                            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            if (ev.changes.size > 1) mode = -1
+                            if (ch.changedToUpIgnoreConsumed() || !ch.pressed) break
+                            val d = ch.positionChangeIgnoreConsumed()
+                            dx += d.x; dy += d.y
+                            if (mode == 0 && (abs(dx) > slop || abs(dy) > slop)) {
+                                mode = if (abs(dx) > abs(dy) * 1.3f) 1 else if (dy > 0f && abs(dy) > abs(dx) * 1.3f) 2 else -1
+                                if (mode > 0) dragging = true
+                            }
+                            if (mode == 1) liveX = dx
+                            if (mode == 2) liveY = dy.coerceAtLeast(0f)
+                        }
+                        val th = 110.dp.toPx()
+                        val closeIt = mode == 2 && dy > th * 1.4f
+                        if (mode == 1 && abs(dx) > th) { if (dx < 0f) Music.next() else Music.prev() }
+                        dragging = false; liveX = 0f; liveY = 0f
+                        if (closeIt) closeNow()
+                    }
+                }
+        ) {
             Column(
-                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                Modifier.fillMaxSize().graphicsLayer { translationY = showY * 0.6f; alpha = 1f - (showY / (size.height * 1.2f)).coerceIn(0f, 0.5f) }
+                    .statusBarsPadding().navigationBarsPadding()
                     .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -638,7 +688,7 @@ fun NowPlaying(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 Box(
-                    Modifier.fillMaxWidth().aspectRatio(1f).graphicsLayer { scaleX = artScale; scaleY = artScale }
+                    Modifier.fillMaxWidth().aspectRatio(1f).graphicsLayer { scaleX = artScale; scaleY = artScale; translationX = showX * 0.5f; alpha = 1f - (abs(showX) / (size.width * 1.5f)).coerceIn(0f, 0.4f) }
                         .clip(RoundedCornerShape(44.dp)).background(cs.secondaryContainer)
                 ) {
                     MediaThumb(s?.uri, Modifier.fillMaxSize(), 900) {
@@ -662,7 +712,7 @@ fun NowPlaying(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
                 WavySeek(
-                    frac, Music.playing, onScrub = { scrub = it },
+                    frac, Music.playing, Modifier.onGloballyPositioned { seekR = it.boundsInRoot() }, onScrub = { scrub = it },
                     onSeek = { f -> if (dur > 0) { val t = (f * dur).toLong(); pos = t; Music.seek(t) } }
                 )
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -686,7 +736,11 @@ fun NowPlaying(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(24.dp))
                 val sleepLeft = if (Music.sleepEnd > now) ((Music.sleepEnd - now) / 60000 + 1).toInt() else 0
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     PillBtn(Ic.Speed, if (Music.speed == 1f) "السرعة" else String.format(Locale.US, "%.2fx", Music.speed).replace(".00x", "x"), Music.speed != 1f) { showSpeed = true }
                     PillBtn(
                         Ic.Timer, if (sleepLeft > 0) "$sleepLeft د" else if (Music.sleepAtTrackEnd) "آخر أغنية" else "المؤقت",

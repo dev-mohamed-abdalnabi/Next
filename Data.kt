@@ -56,6 +56,7 @@ object Prefs {
     var gestures by mutableStateOf(true)         // لمسات السطوع والصوت والتقديم
     var seekSec by mutableIntStateOf(10)         // ثواني الضغط المزدوج
     var autoRotate by mutableStateOf(true)       // لفّ الشاشة حسب شكل الفيديو
+    var openOrient by mutableIntStateOf(1)       // اتجاه الشاشة عند فتح الفيديو: 0 حسب الفيديو، 1 طولي، 2 عرضي
     var keepOn by mutableStateOf(true)           // خلّي الشاشة منوّرة
     var pipAuto by mutableStateOf(true)          // نافذة عايمة لما تخرج
     var aspect by mutableIntStateOf(0)           // 0 مناسب، 1 ملء، 2 قص
@@ -96,7 +97,7 @@ object Prefs {
         longSpeed = sp.getBoolean("ls", true); defaultSpeed = sp.getFloat("ds", 1f)
         dtCenter = sp.getBoolean("dc", true); subColor = sp.getInt("sc", 0); subBg = sp.getBoolean("sb", false)
         amoled = sp.getBoolean("am", false); skipSilence = sp.getBoolean("sl", false); skipIntro = sp.getInt("si", 85)
-        videoListStyle = sp.getInt("vls", 0)
+        videoListStyle = sp.getInt("vls", 0); openOrient = sp.getInt("oo", 1)
         minAudioSec = sp.getInt("ma", 0); restoreQueue = sp.getBoolean("rq", true)
         songSort = sp.getInt("so", 0); vidSort = sp.getInt("vo", 0)
         eqOn = sp.getBoolean("eo", false); eqLevels = sp.getString("el", "") ?: ""
@@ -113,7 +114,7 @@ object Prefs {
             .putBoolean("ls", longSpeed).putFloat("ds", defaultSpeed)
             .putBoolean("dc", dtCenter).putInt("sc", subColor).putBoolean("sb", subBg)
             .putBoolean("am", amoled).putBoolean("sl", skipSilence).putInt("si", skipIntro)
-            .putInt("vls", videoListStyle)
+            .putInt("vls", videoListStyle).putInt("oo", openOrient)
             .putInt("ma", minAudioSec).putBoolean("rq", restoreQueue)
             .putInt("so", songSort).putInt("vo", vidSort)
             .putBoolean("eo", eqOn).putString("el", eqLevels).putInt("bs", bassStr).putInt("vs", virtStr)

@@ -109,8 +109,11 @@ fun SettingsScreen(bottom: Dp) {
             }
         }
         item {
-            SettingRow(Ic.Rotate, "لفّ الشاشة تلقائي", "أفقي للفيديو العريض وطولي للفيديو الطولي", onClick = { Prefs.autoRotate = !Prefs.autoRotate; Prefs.save() }) {
-                Toggle(Prefs.autoRotate) { Prefs.autoRotate = it; Prefs.save() }
+            val orients = listOf(1, 0, 2)   // طولي، حسب الفيديو، عرضي
+            Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SettingRow(Ic.Rotate, "اتجاه الشاشة عند فتح الفيديو")
+                Switcher(listOf("طولي", "حسب الفيديو", "عرضي"), orients.indexOf(Prefs.openOrient).coerceAtLeast(0)) { Prefs.openOrient = orients[it]; Prefs.save() }
+                Footnote("طولي: أي فيديو بيفتح بالطول. عرضي: بالعرض. حسب الفيديو: العريض بالعرض والطولي بالطول. تقدر تلفّ الشاشة بإيدك في أي وقت من زر التدوير.")
             }
         }
         item {
