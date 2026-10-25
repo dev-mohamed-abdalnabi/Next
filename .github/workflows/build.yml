@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,7 +40,7 @@ jobs:
           cp *.ttf app/src/main/res/font/ 2>/dev/null || true
           cp app-build.gradle.kts app/build.gradle.kts 2>/dev/null || true
 
-          # 3. إنشاء خلفية الأيقونة (أسود داكن مطابِق)
+          # 3. إنشاء خلفية الأيقونة
           cat << 'EOF' > app/src/main/res/drawable/ic_launcher_background.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -51,7 +54,7 @@ jobs:
           </vector>
           EOF
 
-          # 4. إنشاء الرسمة الأمامية (المثلث المتموج بلونيه الأبيض والأزرق الرمادي)
+          # 4. إنشاء الرسمة الأمامية للأيقونة
           cat << 'EOF' > app/src/main/res/drawable/ic_launcher_foreground.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -59,30 +62,16 @@ jobs:
               android:height="108dp"
               android:viewportWidth="108"
               android:viewportHeight="108">
-              <!-- النصف العلوي: أبيض ناصع بحواف منحنية وموجة سفلية -->
               <path
                   android:fillColor="#FFFFFF"
-                  android:pathData="M38,30.5
-                                    C38,28.8 39.8,27.8 41.2,28.7
-                                    L76.5,52.4
-                                    C77.8,53.2 77.4,54.2 76.2,54.5
-                                    C69.5,55.5 61.5,51.5 53,50.8
-                                    C45.5,50.2 41,52.8 38,53.2
-                                    Z" />
-
-              <!-- النصف السفلي: أزرق رمادي معدني (#8E9EAF) بالموجة العلوية -->
+                  android:pathData="M 38,30.5 C 38,28.8 39.8,27.8 41.2,28.7 L 76.5,52.4 C 77.8,53.2 77.4,54.2 76.2,54.5 C 69.5,55.5 61.5,51.5 53,50.8 C 45.5,50.2 41,52.8 38,53.2 Z" />
               <path
                   android:fillColor="#8E9EAF"
-                  android:pathData="M38,56.8
-                                    C41,56.2 45.5,53.8 53,54.4
-                                    C61.5,55.2 69.5,59 76.2,56.2
-                                    L41.2,79.2
-                                    C39.8,80.2 38,79.2 38,77.5
-                                    Z" />
+                  android:pathData="M 38,56.8 C 41,56.2 45.5,53.8 53,54.4 C 61.5,55.2 69.5,59.0 76.2,56.2 L 41.2,79.2 C 39.8,80.2 38,79.2 38,77.5 Z" />
           </vector>
           EOF
 
-          # 5. إنشاء ملفات ربط الأيقونة التكيفية
+          # 5. إنشاء ملفات ربط الأيقونة
           cat << 'EOF' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           <?xml version="1.0" encoding="utf-8"?>
           <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
@@ -93,7 +82,7 @@ jobs:
 
           cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
 
-          # 6. التأكد من وجود ملف AndroidManifest.xml وضبط الأيقونة
+          # 6. ملف AndroidManifest.xml
           if [ -f "AndroidManifest.xml" ]; then
               cp AndroidManifest.xml app/src/main/AndroidManifest.xml
           else
@@ -157,7 +146,7 @@ jobs:
           EOF
           fi
 
-          # 7. التأكد من وجود مفتاح التوقيع flow.jks
+          # 7. مفتاح التوقيع
           if [ -f "flow.jks" ]; then
               cp flow.jks app/flow.jks
           else
@@ -165,17 +154,17 @@ jobs:
                 -storepass flowplayer2026 -keypass flowplayer2026 -dname "CN=FlowPlay, OU=App, O=Flow, L=City, S=State, C=US"
           fi
 
-          # 8. توليد Gradle Wrapper إذا لم يكن موجوداً
-          if [ ! -f "gradlew" ]; then
-              gradle wrapper
-          fi
+          # 8. إجبار استخدام Gradle 8.11.1 المتوافق مع أندرويد
+          gradle wrapper --gradle-version 8.11.1
           chmod +x gradlew
 
       - name: Build Release APK
         run: ./gradlew assembleRelease
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Next-APK
-          path: app/build/outputs/apk/release/*.apk
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp app/build/outputs/apk/release/*.apk Next.apk
+          TAG="v1.${{ github.run_number }}"
+          gh release create "$TAG" Next.apk --title "Next $TAG" --notes "Release $TAG" || gh release upload "$TAG" Next.apk --clobber
