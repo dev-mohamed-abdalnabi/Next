@@ -692,7 +692,7 @@ fun NowPlaying(onClose: () -> Unit) {
                                     slide.animateTo(dir * screenW, tween(170, easing = FastOutLinearInEasing))
                                     val before = Music.current
                                     if (fwd) Music.next() else Music.prev()
-                                    withTimeoutOrNull(450) { snapshotFlow { Music.current }.first { it != before } }
+                                    val t0 = System.currentTimeMillis(); while (Music.current == before && System.currentTimeMillis() - t0 < 450L) delay(16)
                                     slide.snapTo(-dir * screenW * 0.55f)
                                     slide.animateTo(0f, spring(0.82f, Spring.StiffnessMediumLow))
                                     switching = false
