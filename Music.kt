@@ -17,7 +17,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import kotlinx.coroutines.flow.first
@@ -622,6 +621,7 @@ private fun PillBtn(icon: ImageVector, text: String?, active: Boolean = false, o
 
 @Composable
 fun NowPlaying(onClose: () -> Unit) {
+    BackHandler { onClose() }
     val cs = MaterialTheme.colorScheme
     val s = Music.current
     var showQueue by remember { mutableStateOf(false) }
@@ -652,31 +652,16 @@ fun NowPlaying(onClose: () -> Unit) {
     var screenW by remember { mutableFloatStateOf(1080f) }
     var seekR by remember { mutableStateOf(Rect.Zero) }   // منطقة شريط التقدّم (مش بنسحب منها)
     val closeNow by rememberUpdatedState(onClose)
-    var screenH by remember { mutableFloatStateOf(2400f) }
-    val enter = remember { Animatable(1f) }                      // 1 = برّه الشاشة (تحت)، 0 = ظاهرة
-    var closing by remember { mutableStateOf(false) }
-    val scrollSt = rememberScrollState()
-    LaunchedEffect(Unit) { enter.animateTo(0f, tween(300, easing = FastOutSlowInEasing)) }
-    // إغلاق بأنيميشن: بنكمّل نزول الشاشة لتحت وبعدين بس نشيلها من الـ composition
-    val doClose: () -> Unit = {
-        if (!closing) {
-            closing = true
-            scope.launch {
-                enter.animateTo(1f, tween(240, easing = FastOutLinearInEasing))
-                closeNow()
-            }
-        }
-    }
-    BackHandler { doClose() }
 
-    // الصندوق الخارجي ثابت (بيستقبل اللمس)، والـ Surface جواه هو اللي بيتحرّك مع الصباع بكل خلفيته وتدرّجه
-    Box(
-        Modifier.fillMaxSize()
-            .onSizeChanged { screenW = it.width.toFloat(); screenH = it.height.toFloat() }
+    // سطح شفاف ثابت بيستقبل اللمس، وجواه طبقة (خلفية + محتوى) بتتحرك مع الصباع كوحدة واحدة
+    Surface(Modifier.fillMaxSize(), color = Color.Transparent) {
+        Box(
+            Modifier.fillMaxSize()
+                .onSizeChanged { screenW = it.width.toFloat() }
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        var mode = if (seekR.contains(down.position) || switching || closing) -1 else 0   // 1 أفقي، 2 لتحت، -1 تجاهل
+                        var mode = if (seekR.contains(down.position) || switching) -1 else 0   // 1 أفقي، 2 لتحت، -1 تجاهل
                         var dx = 0f; var dy = 0f
                         val slop = viewConfiguration.touchSlop * 2f
                         while (true) {
@@ -687,7 +672,7 @@ fun NowPlaying(onClose: () -> Unit) {
                             val d = ch.positionChangeIgnoreConsumed()
                             dx += d.x; dy += d.y
                             if (mode == 0 && (abs(dx) > slop || abs(dy) > slop)) {
-                                mode = if (abs(dx) > abs(dy) * 1.3f) 1 else if (dy > 0f && scrollSt.value == 0 && abs(dy) > abs(dx) * 1.3f) 2 else -1
+                                mode = if (abs(dx) > abs(dy) * 1.3f) 1 else if (dy > 0f && abs(dy) > abs(dx) * 1.3f) 2 else -1
                                 if (mode > 0) dragging = true
                             }
                             if (mode == 1) liveX = dx
@@ -717,27 +702,21 @@ fun NowPlaying(onClose: () -> Unit) {
                                 scope.launch { slide.snapTo(dxNow); liveX = 0f; slide.animateTo(0f, spring(0.8f, 500f)) }
                             }
                         } else liveX = 0f
-                        if (closeIt) doClose() else liveY = 0f
+                        if (closeIt) closeNow() else liveY = 0f
                     }
                 }
-    ) {
-        Surface(
-            Modifier.fillMaxSize().graphicsLayer {
-                translationY = showY + enter.value * screenH
-                val r = (showY / 120.dp.toPx()).coerceIn(0f, 1f) * 32.dp.toPx()
-                shape = RoundedCornerShape(topStart = r, topEnd = r); clip = true
-            },
-            color = cs.surface
         ) {
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(cs.primaryContainer, cs.surface, cs.surface)))) {
+          // الخلفية والمحتوى طبقة واحدة بتنزل مع بعض (translation بس، من غير clip ولا shape عشان مفيش تقل)
+          Box(Modifier.fillMaxSize().graphicsLayer { translationY = showY }
+                .background(Brush.verticalGradient(listOf(cs.primaryContainer, cs.surface, cs.surface)))) {
             Column(
                 Modifier.fillMaxSize()
                     .statusBarsPadding().navigationBarsPadding()
-                    .verticalScroll(scrollSt).padding(horizontal = 24.dp, vertical = 8.dp),
+                    .verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(doClose) { Icon(Ic.Down, "إغلاق") }
+                    IconButton(onClose) { Icon(Ic.Down, "إغلاق") }
                     Text("يتم التشغيل الآن", Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant)
                     IconButton({ showQueue = true }) { Icon(Ic.Queue, "القائمة") }
                 }
@@ -810,7 +789,7 @@ fun NowPlaying(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(16.dp))
             }
-        }
+          }
         }
     }
 
