@@ -130,15 +130,17 @@ object Media {
     var videos by mutableStateOf<List<Vid>>(emptyList())
     var songs by mutableStateOf<List<Song>>(emptyList())
     var loaded by mutableStateOf(false)
+    var refreshing by mutableStateOf(false)   // لسحب-للتحديث
     var byId: Map<Long, Song> = emptyMap()
     private var busy = false
 
     fun refresh(c: Context) {
         if (busy) return
         busy = true
+        refreshing = true
         val app = c.applicationContext
         scope.launch {
-            try { scan(app) } catch (_: Throwable) {} finally { busy = false }
+            try { scan(app); kotlinx.coroutines.delay(500) } catch (_: Throwable) {} finally { busy = false; refreshing = false }
         }
     }
 
@@ -293,6 +295,11 @@ object Store {
         sp.edit().putString("favs", favs.joinToString(",")).apply()
     }
 
+    fun addFavs(ids: Collection<Long>) {
+        favs = favs + ids
+        sp.edit().putString("favs", favs.joinToString(",")).apply()
+    }
+
     fun isVFav(uri: String) = uri in vfavs
     fun toggleVFav(uri: String) {
         vfavs = if (uri in vfavs) vfavs - uri else vfavs + uri
@@ -371,6 +378,15 @@ object Store {
         if (i < 0) return
         val p = playlists[i]
         playlists[i] = Playlist(p.id, p.name, p.ids - songId)
+        savePlaylists()
+    }
+
+    fun removeFromPlaylist(pid: String, songIds: Collection<Long>) {
+        val i = playlists.indexOfFirst { it.id == pid }
+        if (i < 0) return
+        val p = playlists[i]
+        val rm = songIds.toSet()
+        playlists[i] = Playlist(p.id, p.name, p.ids.filter { it !in rm })
         savePlaylists()
     }
 

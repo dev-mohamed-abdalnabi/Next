@@ -44,6 +44,15 @@ class MainActivity : ComponentActivity() {
 
     // فتح ملف صوت من مدير الملفات: يشتغل في المشغّل الموسيقي
     private fun handleAudioIntent(i: Intent?) {
+        // الضغط على إشعار الميديا وفيه فيديو شغّال كصوت فقط: نرجع لشاشة الفيديو
+        if (i?.getBooleanExtra("notif", false) == true) {
+            i.removeExtra("notif")
+            val cur = PlaybackService.exo?.currentMediaItem?.mediaId
+            if (cur != null && VQ.items.any { it.uri == cur }) {
+                try { startActivity(Intent(this, VideoActivity::class.java).putExtra("resume", true)) } catch (_: Throwable) {}
+                return
+            }
+        }
         if (i?.action != Intent.ACTION_VIEW) return
         val u = i.data ?: return
         var name = (u.lastPathSegment ?: "").substringAfterLast('/').substringBeforeLast('.')

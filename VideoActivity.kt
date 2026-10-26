@@ -2,9 +2,11 @@
 
 package app.flowplay
 
+import android.Manifest
 import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color as AColor
 import android.media.AudioManager
@@ -155,6 +157,9 @@ class VideoActivity : ComponentActivity() {
     private var autoApplied = false
     var external = false          // اتفتح من تطبيق تاني (مش من جوه Next)
     private var enhancer: LoudnessEnhancer? = null
+    private var handedOff = false     // الصوت اتنقل لخدمة الموسيقى (إشعار ميديا) وإحنا في الخلفية
+
+    private val notifPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { enableBgAudio() }
 
     private val subPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
         if (u != null) addSubtitle(u)
@@ -184,6 +189,8 @@ class VideoActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // الرجوع من إشعار الميديا: الفيديو شغّال أصلًا، onResume هيسحب مكان التشغيل من الخدمة
+        if (intent.getBooleanExtra("resume", false) && ::player.isInitialized && player.mediaItemCount > 0) return
         savePos()
         handleIntent(intent)
     }
@@ -279,7 +286,11 @@ class VideoActivity : ComponentActivity() {
         var list: List<Vid>
         var start: Int
         external = false
-        if (i?.getBooleanExtra("q", false) == true && VQ.items.isNotEmpty()) {
+        if (i?.getBooleanExtra("resume", false) == true && VQ.items.isNotEmpty()) {
+            // جاي من إشعار الميديا (وضع الصوت فقط): هنسحب القائمة ومكان التشغيل من الخدمة في onResume
+            list = VQ.items; start = VQ.start.coerceIn(0, VQ.items.size - 1)
+            handedOff = true
+        } else if (i?.getBooleanExtra("q", false) == true && VQ.items.isNotEmpty()) {
             list = VQ.items; start = VQ.start
         } else {
             val u = i?.data
@@ -512,6 +523,7 @@ class VideoActivity : ComponentActivity() {
 
     fun enterPip() {
         if (Build.VERSION.SDK_INT < 26) return
+        vs.bgAudio = false
         try {
             val w = max(vs.vw, 16); val h = max(vs.vh, 9)
             val ratio = w.toFloat() / h
@@ -534,7 +546,7 @@ class VideoActivity : ComponentActivity() {
     // ─── دورة الحياة ───
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (Prefs.pipAuto && player.isPlaying) enterPip()
+        if (Prefs.pipAuto && player.isPlaying && !vs.bgAudio) enterPip()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -546,6 +558,13 @@ class VideoActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         savePos()
+        // وضع الصوت فقط: ننقل التشغيل لخدمة الموسيقى (إشعار ميديا + أزرار الشاشة المقفولة + يكمّل لو التطبيق اتقفل)
+        if (vs.bgAudio && !vs.pip && !isInPictureInPictureMode) handoffToService()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        reclaimFromService()
     }
 
     override fun onStart() {
@@ -560,14 +579,78 @@ class VideoActivity : ComponentActivity() {
         } catch (_: Throwable) {}
     }
 
-    fun toggleBgAudio() { vs.bgAudio = !vs.bgAudio }
+    fun toggleBgAudio() {
+        if (vs.bgAudio) { vs.bgAudio = false; vs.toast("تم إيقاف وضع الصوت فقط"); return }
+        // الإشعار محتاج إذن على أندرويد 13+ (ممكن يكون التطبيق اتفتح من مدير الملفات ومحدش طلب الإذن قبل كده)
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            try { notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS) } catch (_: Throwable) { enableBgAudio() }
+        } else enableBgAudio()
+    }
+
+    private fun enableBgAudio() {
+        vs.bgAudio = true
+        vs.toast("صوت فقط: هيكمّل في الخلفية بإشعار")
+    }
+
+    private fun artistOf(v: Vid) = v.folder.takeIf { it.isNotBlank() && it != "غير مصنّف" } ?: "فيديو"
+
+    private fun thumbBytes(uri: String): ByteArray? {
+        if (!uri.startsWith("content://")) return null
+        return try {
+            val b = Thumbs.peek(uri, 400) ?: Thumbs.peek(uri, 500) ?: Thumbs.load(this, uri, 400) ?: return null
+            val o = java.io.ByteArrayOutputStream()
+            b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, o)
+            o.toByteArray()
+        } catch (_: Throwable) { null }
+    }
+
+    // نقل الصوت لخدمة الموسيقى (نفس إشعار الأغاني) وإيقاف مشغّل الفيديو هنا
+    private fun handoffToService() {
+        if (handedOff || !::player.isInitialized || items.isEmpty()) return
+        val st = player.playbackState
+        if (!player.playWhenReady || player.mediaItemCount == 0 || st == Player.STATE_IDLE || st == Player.STATE_ENDED || vs.error != null || vs.muted) return
+        val cur = player.currentMediaItemIndex.coerceIn(0, items.size - 1)
+        // لو "التشغيل التلقائي للتالي" مقفول: بنبعت الفيديو الحالي لوحده عشان يقف في آخره
+        val queue = if (Prefs.autoNext) items else listOf(items[cur])
+        val start = if (Prefs.autoNext) cur else 0
+        val mis = queue.mapIndexed { i, v ->
+            val md = MediaMetadata.Builder().setTitle(v.title).setArtist(artistOf(v))
+                .setExtras(Bundle().apply { putBoolean("vid", true) })
+            if (i == start) thumbBytes(v.uri)?.let { md.setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
+            MediaItem.Builder().setMediaId(v.uri).setUri(v.uri).setMediaMetadata(md.build()).build()
+        }
+        Music.playVideoAudio(mis, start, player.currentPosition, vs.speed, player.repeatMode)
+        player.pause()
+        VQ.items = items; VQ.start = cur
+        handedOff = true
+    }
+
+    // الرجوع للتطبيق: بنسحب مكان التشغيل من الخدمة ونكمّل الفيديو (بالصورة) من نفس النقطة
+    private fun reclaimFromService() {
+        if (!handedOff || !::player.isInitialized) return
+        handedOff = false
+        val svc = PlaybackService.exo
+        val curId = svc?.currentMediaItem?.mediaId
+        val idx = if (curId == null) -1 else items.indexOfFirst { it.uri == curId }
+        var index = player.currentMediaItemIndex
+        var pos = player.currentPosition
+        var play = true
+        if (svc != null && idx >= 0) {
+            index = idx; pos = svc.currentPosition
+            play = svc.playWhenReady && svc.playbackState != Player.STATE_ENDED
+        }
+        // منوقفش موسيقى المستخدم لو بدأ أغنية تانية وإحنا في الخلفية
+        if (svc == null || svc.mediaItemCount == 0 || idx >= 0) Music.releaseVideoAudio()
+        setVideoOff(false)
+        if (player.playbackState == Player.STATE_IDLE) player.prepare()
+        if (player.currentMediaItemIndex != index) player.seekTo(index, pos) else player.seekTo(pos)
+        player.playWhenReady = play
+    }
 
     override fun onStop() {
         super.onStop()
         savePos()
-        if (!isInPictureInPictureMode) {
-            if (vs.bgAudio) setVideoOff(true) else player.pause()
-        }
+        if (!isInPictureInPictureMode && !handedOff) player.pause()
     }
 
     override fun onDestroy() {

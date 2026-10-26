@@ -169,8 +169,9 @@ fun VideoScreen(bottom: Dp) {
         }
     }
 
-    Box(
-        Modifier.fillMaxSize().drawBehind {
+    PullToRefreshBox(
+        isRefreshing = Media.refreshing, onRefresh = { Media.refresh(ctx) },
+        modifier = Modifier.fillMaxSize().drawBehind {
             drawRect(
                 Brush.radialGradient(
                     listOf(cs.primaryContainer.copy(alpha = 0.72f), Color.Transparent),
@@ -301,6 +302,7 @@ fun VideoScreen(bottom: Dp) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("${sel.size} محدد", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
+            IconButton({ val c = all.filter { it.uri in sel }; sel = emptySet(); openVideo(ctx, c, 0) }) { Icon(Ic.Play, "تشغيل") }
             TextButton({ sel = list.map { it.uri }.toSet() }) { Text("الكل") }
             IconButton({ shareVids(ctx, all.filter { it.uri in sel }) }) { Icon(Ic.Share, "مشاركة") }
             IconButton({ delTarget = all.filter { it.uri in sel } }) { Icon(Ic.Delete, "حذف") }
@@ -383,6 +385,22 @@ private fun ContinueCard(v: Vid, onClick: () -> Unit) {
     }
 }
 
+// قائمة ثلاث نقاط جنب كل فيديو (بدل أزرار المفضلة والمشاركة والحذف)
+@Composable
+private fun VideoMenu(fav: Boolean, onFav: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit, size: Dp) {
+    val cs = MaterialTheme.colorScheme
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        IconButton({ menu = true }, Modifier.size(size)) { Icon(Ic.More, "المزيد", Modifier.size(20.dp)) }
+        DropdownMenu(menu, { menu = false }) {
+            DropdownMenuItem({ Text(if (fav) "إزالة من المفضلة" else "إضافة للمفضلة") }, { menu = false; onFav() },
+                leadingIcon = { Icon(if (fav) Ic.HeartFill else Ic.Heart, null, tint = if (fav) cs.primary else cs.onSurfaceVariant) })
+            DropdownMenuItem({ Text("مشاركة") }, { menu = false; onShare() }, leadingIcon = { Icon(Ic.Share, null) })
+            DropdownMenuItem({ Text("حذف", color = cs.error) }, { menu = false; onDelete() }, leadingIcon = { Icon(Ic.Delete, null, tint = cs.error) })
+        }
+    }
+}
+
 @Composable
 private fun YoutubeVideoCard(
     v: Vid, selected: Boolean, onClick: () -> Unit, onLong: () -> Unit,
@@ -438,13 +456,7 @@ private fun YoutubeVideoCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                IconButton(onFav, Modifier.size(32.dp)) {
-                    Icon(if (fav) Ic.HeartFill else Ic.Heart, "مفضلة", Modifier.size(18.dp), tint = if (fav) cs.primary else cs.onSurfaceVariant)
-                }
-                IconButton(onShare, Modifier.size(32.dp)) { Icon(Ic.Share, "مشاركة", Modifier.size(18.dp)) }
-                IconButton(onDelete, Modifier.size(32.dp)) { Icon(Ic.Delete, "حذف", Modifier.size(18.dp), tint = cs.error) }
-            }
+            VideoMenu(fav, onFav, onShare, onDelete, 32.dp)
         }
     }
 }
@@ -487,11 +499,7 @@ private fun VideoCard(
         Text(v.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 4.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(fmtSize(v.size), Modifier.weight(1f).padding(horizontal = 4.dp), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            IconButton(onFav, Modifier.size(36.dp)) {
-                Icon(if (fav) Ic.HeartFill else Ic.Heart, "مفضلة", Modifier.size(20.dp), tint = if (fav) cs.primary else cs.onSurfaceVariant)
-            }
-            IconButton(onShare, Modifier.size(36.dp)) { Icon(Ic.Share, "مشاركة", Modifier.size(20.dp)) }
-            IconButton(onDelete, Modifier.size(36.dp)) { Icon(Ic.Delete, "حذف", Modifier.size(20.dp)) }
+            VideoMenu(fav, onFav, onShare, onDelete, 36.dp)
         }
     }
 }

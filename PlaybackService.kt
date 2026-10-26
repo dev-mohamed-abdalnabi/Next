@@ -58,7 +58,7 @@ class PlaybackService : MediaSessionService() {
             override fun onAudioSessionIdChanged(audioSessionId: Int) { Fx.attach(audioSessionId) }
         })
         Fx.attach(player.audioSessionId)
-        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).putExtra("notif", true), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         session = MediaSession.Builder(this, player).setSessionActivity(open).build()
     }
 
@@ -209,7 +209,8 @@ object Music {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            if (mediaItem != null && sleepAtTrackEnd && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+            if (mediaItem != null && sleepAtTrackEnd &&
+                (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)) {
                 sleepAtTrackEnd = false
                 ctl?.pause()
             }
@@ -279,6 +280,12 @@ object Music {
     private fun saveSession(c: Player) {
         val n = c.mediaItemCount
         if (n == 0) return
+        // فيديو بيشتغل كصوت فقط: نحفظ مكان توقفه عشان يكمّل منه في الفيديو
+        val curItem = c.currentMediaItem
+        if (curItem?.mediaMetadata?.extras?.getBoolean("vid") == true) {
+            if (Prefs.resume) Store.setVideoPos(curItem.mediaId, c.currentPosition, c.duration.takeIf { it > 0 } ?: 0L)
+            return
+        }
         val ids = (0 until n).mapNotNull { c.getMediaItemAt(it).mediaId.toLongOrNull() }
         if (ids.size != n) return
         Prefs.lastQueue = ids.joinToString(",")
@@ -309,6 +316,22 @@ object Music {
     fun shuffleAll(list: List<Song>) {
         if (list.isEmpty()) return
         play(list, Random.nextInt(list.size), true)
+    }
+
+    // ─── وضع "صوت فقط" للفيديو: الفيديو بيتنقل هنا عشان يكمّل في الخلفية بإشعار ميديا ───
+    fun playVideoAudio(list: List<MediaItem>, index: Int, posMs: Long, speed: Float, repeatMode: Int) = withCtl { c ->
+        if (list.isEmpty()) return@withCtl
+        c.setMediaItems(list, index.coerceIn(0, list.size - 1), posMs)
+        c.shuffleModeEnabled = false
+        c.repeatMode = repeatMode
+        c.setPlaybackSpeed(speed)
+        c.prepare()
+        c.play()
+    }
+
+    fun releaseVideoAudio() = withCtl { c ->
+        c.stop(); c.clearMediaItems()
+        c.setPlaybackSpeed(1f); c.repeatMode = Player.REPEAT_MODE_OFF
     }
 
     fun playExternal(uri: Uri, title: String) = withCtl { c ->

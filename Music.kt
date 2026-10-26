@@ -6,6 +6,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,7 +24,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -92,11 +96,18 @@ private class AlbumInfo(val id: Long, val name: String, val artist: String, val 
 
 private val SongSortNames = listOf("الاسم", "الفنان", "الأحدث", "المدة")
 
-private fun shareSong(c: Context, s: Song) = try {
-    val i = Intent(Intent.ACTION_SEND).setType("audio/*").putExtra(Intent.EXTRA_STREAM, Uri.parse(s.uri))
-        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    c.startActivity(Intent.createChooser(i, null))
-} catch (_: Throwable) {}
+// مشاركة أغنية أو أكتر (لو أكتر من واحدة بنستخدم SEND_MULTIPLE)
+private fun shareSongs(c: Context, l: List<Song>) {
+    if (l.isEmpty()) return
+    try {
+        val i = if (l.size == 1) Intent(Intent.ACTION_SEND).setType("audio/*").putExtra(Intent.EXTRA_STREAM, Uri.parse(l[0].uri))
+        else Intent(Intent.ACTION_SEND_MULTIPLE).setType("audio/*")
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(l.map { Uri.parse(it.uri) }))
+        c.startActivity(Intent.createChooser(i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
+    } catch (_: Throwable) {
+        Toast.makeText(c, "تعذّرت المشاركة (جرّب عدد أقل)", Toast.LENGTH_SHORT).show()
+    }
+}
 
 private fun listFor(key: String): List<Song> = when {
     key == "fav" -> Media.songs.filter { it.id in Store.favs }
@@ -137,17 +148,26 @@ fun MusicScreen(bottom: Dp) {
     var delDlg by remember { mutableStateOf(false) }
     var detailMenu by remember { mutableStateOf(false) }
     var infoSong by remember { mutableStateOf<Song?>(null) }
-    var delSong by remember { mutableStateOf<Song?>(null) }
+    var delSongs by remember { mutableStateOf<List<Song>?>(null) }
+    var sel by remember { mutableStateOf(setOf<Long>()) }       // الأغاني المحددة (بالـ id)
+    var selMenu by remember { mutableStateOf(false) }
+    val selecting = sel.isNotEmpty()
 
     val delLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
-        if (r.resultCode == Activity.RESULT_OK) Media.refresh(ctx)
+        if (r.resultCode == Activity.RESULT_OK) { sel = emptySet(); Media.refresh(ctx) }
     }
-    fun doDeleteSong(s: Song) {
-        val ok = deleteMedia(ctx, listOf(Uri.parse(s.uri))) { delLauncher.launch(IntentSenderRequest.Builder(it).build()) }
+    fun doDeleteSongs(l: List<Song>) {
+        if (l.isEmpty()) return
+        val ok = deleteMedia(ctx, l.map { Uri.parse(it.uri) }) { delLauncher.launch(IntentSenderRequest.Builder(it).build()) }
         if (!ok) Toast.makeText(ctx, "تعذّر الحذف", Toast.LENGTH_SHORT).show()
+        else if (Build.VERSION.SDK_INT < 30) sel = emptySet()
     }
 
     BackHandler(enabled = detail != null) { detail = null }
+    // لازم تيجي بعد اللي فوق: آخر BackHandler مفعّل هو اللي بيشتغل الأول (يلغي التحديد قبل ما يرجع)
+    BackHandler(enabled = selecting) { sel = emptySet() }
+    // تغيير التبويب أو فتح/قفل قائمة بيلغي التحديد
+    LaunchedEffect(sub, detail) { sel = emptySet() }
 
     val all = Media.songs
     val sortKey = Prefs.songSort
@@ -171,8 +191,23 @@ fun MusicScreen(bottom: Dp) {
     val full: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
     val playingId = Music.current?.id ?: -1L
 
-    Box(
-        Modifier.fillMaxSize().drawBehind {
+    // القايمة اللي ظاهرة قدام المستخدم دلوقتي (تفاصيل قايمة/ألبوم/فنان أو كل الأغاني) + المحدد منها بنفس الترتيب
+    val dList = detail?.let { listFor(it) }
+    val shown = dList ?: songs
+    val chosen = remember(sel, shown, all) {
+        if (sel.isEmpty()) emptyList() else {
+            val a = shown.filter { it.id in sel }
+            if (a.size == sel.size) a else {
+                val seen = a.mapTo(HashSet()) { it.id }
+                a + all.filter { it.id in sel && it.id !in seen }
+            }
+        }
+    }
+    fun toggleSel(id: Long) { sel = if (id in sel) sel - id else sel + id }
+
+    PullToRefreshBox(
+        isRefreshing = Media.refreshing, onRefresh = { Media.refresh(ctx) },
+        modifier = Modifier.fillMaxSize().drawBehind {
             drawRect(
                 Brush.radialGradient(
                     listOf(cs.tertiaryContainer.copy(alpha = 0.68f), Color.Transparent),
@@ -183,7 +218,7 @@ fun MusicScreen(bottom: Dp) {
     ) {
         val d = detail
         if (d != null) {
-            val list = listFor(d)
+            val list = dList ?: emptyList()
             val title = titleFor(d, list)
             val isPl = d.startsWith("pl:")
             LazyVerticalGrid(
@@ -231,10 +266,11 @@ fun MusicScreen(bottom: Dp) {
                 items(list, key = { it.id }) { s ->
                     SongRow(
                         s, s.id == playingId,
-                        onClick = { Music.play(list, list.indexOf(s)) },
+                        onClick = { if (selecting) toggleSel(s.id) else Music.play(list, list.indexOf(s)) },
                         onAddPl = { addTo = listOf(s.id) },
                         onRemove = if (isPl) ({ Store.removeFromPlaylist(d.drop(3), s.id) }) else null,
-                        onInfo = { infoSong = s }, onDelete = { delSong = s }
+                        onInfo = { infoSong = s }, onDelete = { delSongs = listOf(s) },
+                        selecting = selecting, selected = s.id in sel, onSelect = { toggleSel(s.id) }
                     )
                 }
             }
@@ -272,6 +308,8 @@ fun MusicScreen(bottom: Dp) {
                                             onClick = { sortMenu = false; Music.play(songs, 0) })
                                         DropdownMenuItem(text = { Text("عشوائي") }, leadingIcon = { Icon(Ic.Shuffle, null) },
                                             onClick = { sortMenu = false; Music.shuffleAll(songs) })
+                                        DropdownMenuItem(text = { Text("تحديد الكل") }, leadingIcon = { Icon(Ic.Check, null) },
+                                            onClick = { sortMenu = false; sel = songs.map { it.id }.toSet() })
                                         HorizontalDivider()
                                     }
                                     SongSortNames.forEachIndexed { i, n ->
@@ -308,8 +346,11 @@ fun MusicScreen(bottom: Dp) {
                         if (songs.isEmpty()) item(span = full) { EmptyState(Ic.Search, "مفيش نتائج", "جرّب كلمة تانية.") }
                         items(songs, key = { it.id }, span = { GridItemSpan(maxLineSpan) }) { s ->
                             SongRow(
-                                s, s.id == playingId, onClick = { Music.play(songs, songs.indexOf(s)) }, onAddPl = { addTo = listOf(s.id) },
-                                onInfo = { infoSong = s }, onDelete = { delSong = s }
+                                s, s.id == playingId,
+                                onClick = { if (selecting) toggleSel(s.id) else Music.play(songs, songs.indexOf(s)) },
+                                onAddPl = { addTo = listOf(s.id) },
+                                onInfo = { infoSong = s }, onDelete = { delSongs = listOf(s) },
+                                selecting = selecting, selected = s.id in sel, onSelect = { toggleSel(s.id) }
                             )
                         }
                     }
@@ -362,6 +403,45 @@ fun MusicScreen(bottom: Dp) {
                 }
             }
         }
+        // شريط التحديد: ثابت فوق الشاشة مهما كان مكان السكرول
+        if (selecting) Row(
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 8.dp)
+                .shadow(6.dp, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp)).background(cs.secondaryContainer)
+                .padding(start = 18.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("${sel.size} محدد", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer, maxLines = 1)
+            TextButton({ sel = if (sel.size >= shown.size && shown.isNotEmpty()) emptySet() else shown.map { it.id }.toSet() }) {
+                Text(if (sel.size >= shown.size && shown.isNotEmpty()) "إلغاء الكل" else "الكل", maxLines = 1)
+            }
+            IconButton({ delSongs = chosen }) { Icon(Ic.Delete, "حذف", tint = cs.error) }
+            Box {
+                IconButton({ selMenu = true }) { Icon(Ic.More, "المزيد") }
+                DropdownMenu(selMenu, { selMenu = false }) {
+                    DropdownMenuItem({ Text("تشغيل") }, { selMenu = false; Music.play(chosen, 0); sel = emptySet() }, leadingIcon = { Icon(Ic.Play, null) })
+                    DropdownMenuItem({ Text("عشوائي") }, { selMenu = false; Music.shuffleAll(chosen); sel = emptySet() }, leadingIcon = { Icon(Ic.Shuffle, null) })
+                    DropdownMenuItem({ Text("إضافة للقائمة الحالية") }, {
+                        selMenu = false; Music.enqueueAll(chosen)
+                        Toast.makeText(ctx, "اتضاف ${chosen.size} للقائمة الحالية", Toast.LENGTH_SHORT).show(); sel = emptySet()
+                    }, leadingIcon = { Icon(Ic.Queue, null) })
+                    DropdownMenuItem({ Text("إضافة إلى قائمة تشغيل") }, { selMenu = false; addTo = chosen.map { it.id }; sel = emptySet() }, leadingIcon = { Icon(Ic.Plus, null) })
+                    DropdownMenuItem({ Text("إضافة للمفضلة") }, {
+                        selMenu = false; Store.addFavs(chosen.map { it.id })
+                        Toast.makeText(ctx, "اتضاف ${chosen.size} للمفضلة", Toast.LENGTH_SHORT).show(); sel = emptySet()
+                    }, leadingIcon = { Icon(Ic.Heart, null) })
+                    DropdownMenuItem({ Text("مشاركة") }, { selMenu = false; shareSongs(ctx, chosen) }, leadingIcon = { Icon(Ic.Share, null) })
+                    if (detail?.startsWith("pl:") == true) DropdownMenuItem({ Text("إزالة من القائمة", color = cs.error) }, {
+                        selMenu = false
+                        val pid = detail!!.drop(3)
+                        Store.removeFromPlaylist(pid, chosen.map { it.id })
+                        sel = emptySet()
+                    })
+                }
+            }
+            IconButton({ sel = emptySet() }) { Icon(Ic.Close, "إلغاء التحديد") }
+        }
     }
 
     addTo?.let { ids -> AddToPlaylistDialog(ids) { addTo = null } }
@@ -386,12 +466,18 @@ fun MusicScreen(bottom: Dp) {
             confirmButton = { TextButton({ infoSong = null }) { Text("تم") } }
         )
     }
-    delSong?.let { s ->
+    delSongs?.let { d ->
         AlertDialog(
-            onDismissRequest = { delSong = null }, title = { Text("حذف الأغنية؟") },
-            text = { Text("\"${s.title}\"\nهتتمسح من جهازك نهائيًا.", maxLines = 4, overflow = TextOverflow.Ellipsis) },
-            confirmButton = { TextButton({ val t = s; delSong = null; doDeleteSong(t) }) { Text("حذف", color = cs.error) } },
-            dismissButton = { TextButton({ delSong = null }) { Text("إلغاء") } }
+            onDismissRequest = { delSongs = null },
+            title = { Text(if (d.size == 1) "حذف الأغنية؟" else "حذف ${d.size} أغنية؟") },
+            text = {
+                Text(
+                    if (d.size == 1) "\"${d[0].title}\"\nهتتمسح من جهازك نهائيًا." else "هيتمسحوا من جهازك نهائيًا ومش هتقدر ترجّعهم.",
+                    maxLines = 4, overflow = TextOverflow.Ellipsis
+                )
+            },
+            confirmButton = { TextButton({ val t = d; delSongs = null; doDeleteSongs(t) }) { Text("حذف", color = cs.error) } },
+            dismissButton = { TextButton({ delSongs = null }) { Text("إلغاء") } }
         )
     }
 }
@@ -416,15 +502,16 @@ private fun PlaylistRow(icon: ImageVector, title: String, sub: String, bg: Color
 @Composable
 private fun SongRow(
     s: Song, playing: Boolean, onClick: () -> Unit, onAddPl: () -> Unit, onRemove: (() -> Unit)? = null,
-    onInfo: () -> Unit = {}, onDelete: (() -> Unit)? = null
+    onInfo: () -> Unit = {}, onDelete: (() -> Unit)? = null,
+    selecting: Boolean = false, selected: Boolean = false, onSelect: () -> Unit = {}
 ) {
     val cs = MaterialTheme.colorScheme
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-            .background(if (playing) cs.primaryContainer.copy(alpha = 0.6f) else Color.Transparent)
-            .clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 6.dp),
+            .background(if (selected) cs.secondaryContainer else if (playing) cs.primaryContainer.copy(alpha = 0.6f) else Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onSelect).padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         MediaThumb(s.uri, Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(cs.secondaryContainer), 160) {
@@ -437,14 +524,22 @@ private fun SongRow(
             Text(s.artist, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = cs.onSurfaceVariant)
         }
         if (s.dur > 0) Text(fmtMs(s.dur), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-        Box {
+        if (selecting) Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(24.dp).clip(CircleShape)
+                    .background(if (selected) cs.primary else Color.Transparent)
+                    .border(2.dp, if (selected) cs.primary else cs.outline, CircleShape),
+                contentAlignment = Alignment.Center
+            ) { if (selected) Icon(Ic.Check, null, Modifier.size(16.dp), tint = cs.onPrimary) }
+        } else Box {
             IconButton({ menu = true }, Modifier.size(36.dp)) { Icon(Ic.More, "المزيد", Modifier.size(20.dp)) }
             DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem({ Text("تحديد") }, { menu = false; onSelect() })
                 DropdownMenuItem({ Text("تشغيل بعد الحالية") }, { menu = false; Music.playNext(s); Toast.makeText(ctx, "هتشتغل بعد الحالية", Toast.LENGTH_SHORT).show() })
                 DropdownMenuItem({ Text("إضافة للقائمة الحالية") }, { menu = false; Music.enqueue(s); Toast.makeText(ctx, "اتضافت للقائمة", Toast.LENGTH_SHORT).show() })
                 DropdownMenuItem({ Text("إضافة إلى قائمة تشغيل") }, { menu = false; onAddPl() })
                 DropdownMenuItem({ Text(if (Store.isFav(s.id)) "إزالة من المفضلة" else "إضافة للمفضلة") }, { menu = false; Store.toggleFav(s.id) })
-                DropdownMenuItem({ Text("مشاركة") }, { menu = false; shareSong(ctx, s) })
+                DropdownMenuItem({ Text("مشاركة") }, { menu = false; shareSongs(ctx, listOf(s)) })
                 DropdownMenuItem({ Text("معلومات الأغنية") }, { menu = false; onInfo() })
                 if (onDelete != null) DropdownMenuItem({ Text("حذف من الجهاز", color = cs.error) }, { menu = false; onDelete() })
                 if (onRemove != null) DropdownMenuItem({ Text("إزالة من القائمة", color = cs.error) }, { menu = false; onRemove() })
