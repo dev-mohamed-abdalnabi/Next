@@ -205,8 +205,8 @@ fun MusicScreen(bottom: Dp) {
     }
     fun toggleSel(id: Long) { sel = if (id in sel) sel - id else sel + id }
 
-    PullToRefreshBox(
-        isRefreshing = Media.refreshing, onRefresh = { Media.refresh(ctx) },
+    PullRefresh(
+        refreshing = Media.refreshing, onRefresh = { Media.refresh(ctx) },
         modifier = Modifier.fillMaxSize().drawBehind {
             drawRect(
                 Brush.radialGradient(

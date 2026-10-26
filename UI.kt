@@ -94,6 +94,12 @@ import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.roundToInt
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Velocity
 import kotlin.math.sin
 
 // ═══════════════════════════ الثيم ═══════════════════════════
@@ -680,6 +686,55 @@ fun EmptyState(icon: ImageVector, title: String, body: String) {
         Spacer(Modifier.height(10.dp))
         Text(title, style = MaterialTheme.typography.headlineSmall)
         Text(body, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, textAlign = TextAlign.Center)
+    }
+}
+
+// سحب للتحديث (بدون مكتبات إضافية): اسحب لتحت وإنت في أول القايمة
+@Composable
+fun PullRefresh(refreshing: Boolean, onRefresh: () -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val trigger = with(LocalDensity.current) { 80.dp.toPx() }
+    var pull by remember { mutableFloatStateOf(0f) }
+    val refreshNow by rememberUpdatedState(onRefresh)
+    val conn = remember(trigger) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (pull > 0f && available.y < 0f) {
+                    val d = maxOf(available.y, -pull)
+                    pull += d
+                    return Offset(0f, d)
+                }
+                return Offset.Zero
+            }
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0f) {
+                    pull += available.y * 0.5f
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pull >= trigger) refreshNow()
+                pull = 0f
+                return Velocity.Zero
+            }
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                pull = 0f
+                return Velocity.Zero
+            }
+        }
+    }
+    Box(modifier.nestedScroll(conn)) {
+        content()
+        if (refreshing || pull > 0f) Box(
+            Modifier.align(Alignment.TopCenter).statusBarsPadding()
+                .offset { IntOffset(0, (if (refreshing) trigger * 0.6f else pull.coerceAtMost(trigger * 1.2f)).roundToInt()) }
+                .padding(top = 8.dp).size(44.dp).clip(CircleShape).background(cs.surfaceContainerHigh),
+            contentAlignment = Alignment.Center
+        ) {
+            if (refreshing) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
+            else CircularProgressIndicator(progress = { (pull / trigger).coerceIn(0f, 1f) }, modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp)
+        }
     }
 }
 

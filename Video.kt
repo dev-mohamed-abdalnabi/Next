@@ -169,8 +169,8 @@ fun VideoScreen(bottom: Dp) {
         }
     }
 
-    PullToRefreshBox(
-        isRefreshing = Media.refreshing, onRefresh = { Media.refresh(ctx) },
+    PullRefresh(
+        refreshing = Media.refreshing, onRefresh = { Media.refresh(ctx) },
         modifier = Modifier.fillMaxSize().drawBehind {
             drawRect(
                 Brush.radialGradient(
